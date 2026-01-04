@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     default_currency: str = "USD"
 
     # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/ins_sup_agent"
+    database_url: str = "postgresql://postgres:postgres@localhost:5433/ins_sup_agent"
 
     # JobNimbus Integration
     jobnimbus_api_key: str = ""
