@@ -1,0 +1,90 @@
+INSURANCE ESTIMATE
+================================================================================
+Claim Number: CLM-2024-78432
+Policy Number: HO3-9876543
+Date of Loss: 11/15/2024
+Carrier: State Farm Insurance
+Adjuster: Mike Johnson
+
+INSURED INFORMATION
+--------------------------------------------------------------------------------
+Name: John & Jane Doe
+Property Address: 1234 Oak Street, Dallas, TX 75201
+Phone: (214) 555-0123
+
+PROPERTY DETAILS
+--------------------------------------------------------------------------------
+Year Built: 1998
+Roof Type: Composition Shingle
+Stories: 2
+Total Roof Squares: 32.5
+
+================================================================================
+                              LINE ITEM DETAILS
+================================================================================
+
+ROOFING - STEEP
+--------------------------------------------------------------------------------
+Line  Description                                    Qty    Unit   Unit Price   Total
+--------------------------------------------------------------------------------
+1     Remove Roofing - Comp. shingle                32.5   SQ     $45.00       $1,462.50
+2     Roofing felt - 15 lb                          32.5   SQ     $12.50       $406.25
+3     Shingles - Comp., 3-tab, 25 yr               32.5   SQ     $185.00      $6,012.50
+4     Drip edge - aluminum                         245.0   LF     $2.85        $698.25
+5     Ridge cap - composition shingle               85.0   LF     $6.50        $552.50
+6     Pipe jack/boot flashing - 1.5" to 3"          4.0   EA     $45.00       $180.00
+7     Step flashing - aluminum                      48.0   LF     $8.25        $396.00
+8     Valley metal - aluminum W-type                32.0   LF     $12.50       $400.00
+
+                                         ROOFING SUBTOTAL:        $10,108.00
+
+GUTTERS
+--------------------------------------------------------------------------------
+Line  Description                                    Qty    Unit   Unit Price   Total
+--------------------------------------------------------------------------------
+9     R&R Gutter - aluminum - up to 5"            125.0   LF     $8.50        $1,062.50
+10    R&R Downspout - aluminum                      45.0   LF     $6.75        $303.75
+
+                                         GUTTERS SUBTOTAL:        $1,366.25
+
+GENERAL CONDITIONS
+--------------------------------------------------------------------------------
+Line  Description                                    Qty    Unit   Unit Price   Total
+--------------------------------------------------------------------------------
+11    Haul debris - per load                         2.0   EA     $175.00      $350.00
+12    Temporary protection                           1.0   EA     $250.00      $250.00
+
+                                    GEN CONDITIONS SUBTOTAL:       $600.00
+
+================================================================================
+                                   SUMMARY
+================================================================================
+Roofing                                                          $10,108.00
+Gutters                                                           $1,366.25
+General Conditions                                                  $600.00
+--------------------------------------------------------------------------------
+SUBTOTAL                                                         $12,074.25
+Overhead (10%)                                                    $1,207.43
+Profit (10%)                                                      $1,207.43
+--------------------------------------------------------------------------------
+REPLACEMENT COST VALUE (RCV)                                     $14,489.11
+
+Less Depreciation                                                ($2,173.37)
+--------------------------------------------------------------------------------
+ACTUAL CASH VALUE (ACV)                                          $12,315.74
+
+Less Deductible                                                  ($2,500.00)
+--------------------------------------------------------------------------------
+NET CLAIM                                                         $9,815.74
+
+================================================================================
+ADJUSTER NOTES
+================================================================================
+- Approved for 3-tab composition shingles
+- No code upgrade applied
+- Standard O&P at 10%/10%
+- Depreciation calculated at 15% based on roof age
+
+Prepared by: Mike Johnson, Field Adjuster
+Date: 11/20/2024
+================================================================================
