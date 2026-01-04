@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.api.routes import health, jobs
+from src.api.routes import health, jobs, contacts
 from src.db.connection import init_db, close_pool
 
 
@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(jobs.router, prefix="/v1", tags=["Jobs"])
+app.include_router(contacts.router, prefix="/v1", tags=["Contacts"])
 
 
 @app.get("/", include_in_schema=False)

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5432/ins_sup_agent"
 
+    # JobNimbus Integration
+    jobnimbus_api_key: str = ""
+
     # Logging
     log_level: str = "INFO"
 

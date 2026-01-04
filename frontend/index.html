@@ -76,19 +76,36 @@
         }
 
         input[type="text"],
-        input[type="number"] {
+        input[type="number"],
+        select {
             width: 100%;
             padding: 0.75rem 1rem;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             font-size: 1rem;
             transition: border-color 0.2s, box-shadow 0.2s;
+            background: white;
         }
 
-        input:focus {
+        input:focus,
+        select:focus {
             outline: none;
             border-color: #4f46e5;
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            padding-right: 2.5rem;
+        }
+
+        select:disabled {
+            background-color: #f3f4f6;
+            cursor: not-allowed;
         }
 
         .input-row {
@@ -112,6 +129,35 @@
             top: 50%;
             transform: translateY(-50%);
             color: #6b7280;
+        }
+
+        .contact-info {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f0fdf4;
+            border-radius: 8px;
+            border: 1px solid #86efac;
+        }
+
+        .contact-info-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .contact-info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .contact-info-label {
+            color: #166534;
+            font-weight: 500;
+            min-width: 80px;
+        }
+
+        .contact-info-value {
+            color: #15803d;
         }
 
         .upload-zone {
@@ -272,6 +318,21 @@
             margin-top: 0.5rem;
         }
 
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #d1d5db;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 1rem;
@@ -290,29 +351,40 @@
 <body>
     <div class="container">
         <h1>Insurance Supplement Generator</h1>
-        <p class="subtitle">Upload your estimate and photos to generate a supplement</p>
+        <p class="subtitle">Select a contact and upload documents to generate a supplement</p>
 
         <form id="uploadForm">
             <div class="card">
                 <div class="card-title">
                     <span class="step">1</span>
-                    Job Information
+                    Select Contact
                 </div>
                 
                 <div class="form-group">
-                    <label for="carrier">Insurance Carrier</label>
-                    <input type="text" id="carrier" name="carrier" placeholder="e.g., State Farm, Allstate, USAA" required>
+                    <label for="contactSelect">Property Owner</label>
+                    <select id="contactSelect" name="contactSelect" required>
+                        <option value="">Loading contacts...</option>
+                    </select>
                 </div>
 
-                <div class="input-row">
-                    <div class="form-group">
-                        <label for="insuredName">Insured Name</label>
-                        <input type="text" id="insuredName" name="insuredName" placeholder="Property owner name" required>
+                <div id="contactInfo" class="contact-info hidden">
+                    <div class="contact-info-row">
+                        <span class="contact-info-label">Name:</span>
+                        <span class="contact-info-value" id="displayName"></span>
                     </div>
-                    <div class="form-group">
-                        <label for="propertyAddress">Property Address</label>
-                        <input type="text" id="propertyAddress" name="propertyAddress" placeholder="123 Main St, City, TX" required>
+                    <div class="contact-info-row">
+                        <span class="contact-info-label">Address:</span>
+                        <span class="contact-info-value" id="displayAddress"></span>
                     </div>
+                    <div class="contact-info-row">
+                        <span class="contact-info-label">Location:</span>
+                        <span class="contact-info-value" id="displayLocation"></span>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 1.25rem;">
+                    <label for="carrier">Insurance Carrier</label>
+                    <input type="text" id="carrier" name="carrier" placeholder="e.g., State Farm, Allstate, USAA" required>
                 </div>
             </div>
 
@@ -381,7 +453,7 @@
             </div>
 
             <div class="card">
-                <button type="submit" class="btn btn-primary" id="submitBtn">
+                <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
                     Generate Supplement
                 </button>
                 <div id="statusMessage" class="status-message hidden"></div>
@@ -390,11 +462,11 @@
     </div>
 
     <script>
-        const API_BASE = window.location.hostname === 'localhost' 
-            ? 'http://localhost:8000' 
-            : '';
+        const API_BASE = window.location.origin;
 
         const form = document.getElementById('uploadForm');
+        const contactSelect = document.getElementById('contactSelect');
+        const contactInfo = document.getElementById('contactInfo');
         const pdfDropZone = document.getElementById('pdfDropZone');
         const photosDropZone = document.getElementById('photosDropZone');
         const pdfInput = document.getElementById('estimatePdf');
@@ -406,6 +478,60 @@
         const statusMessage = document.getElementById('statusMessage');
 
         let selectedPhotos = [];
+        let contacts = [];
+        let selectedContact = null;
+
+        async function loadContacts() {
+            try {
+                const response = await fetch(`${API_BASE}/v1/contacts`);
+                if (!response.ok) {
+                    throw new Error('Failed to load contacts');
+                }
+                contacts = await response.json();
+                
+                contactSelect.innerHTML = '<option value="">Select a contact...</option>';
+                contacts.forEach(contact => {
+                    const option = document.createElement('option');
+                    option.value = contact.id;
+                    const location = [contact.city, contact.state].filter(Boolean).join(', ');
+                    option.textContent = `${contact.name}${location ? ` - ${location}` : ''}`;
+                    contactSelect.appendChild(option);
+                });
+                
+                updateSubmitButton();
+            } catch (err) {
+                contactSelect.innerHTML = '<option value="">Error loading contacts</option>';
+                showStatus(`Failed to load contacts: ${err.message}`, 'error');
+            }
+        }
+
+        contactSelect.addEventListener('change', () => {
+            const contactId = contactSelect.value;
+            selectedContact = contacts.find(c => c.id === contactId) || null;
+            
+            if (selectedContact) {
+                document.getElementById('displayName').textContent = selectedContact.name;
+                document.getElementById('displayAddress').textContent = selectedContact.address || 'N/A';
+                const location = [selectedContact.city, selectedContact.state, selectedContact.zip].filter(Boolean).join(', ');
+                document.getElementById('displayLocation').textContent = location || 'N/A';
+                contactInfo.classList.remove('hidden');
+            } else {
+                contactInfo.classList.add('hidden');
+            }
+            
+            updateSubmitButton();
+        });
+
+        function updateSubmitButton() {
+            const hasContact = !!selectedContact;
+            const hasCarrier = !!document.getElementById('carrier').value;
+            const hasPdf = !!pdfInput.files[0];
+            const hasPhotos = selectedPhotos.length > 0;
+            const hasCosts = !!document.getElementById('materialsCost').value && 
+                           !!document.getElementById('laborCost').value;
+            
+            submitBtn.disabled = !(hasContact && hasPdf && hasPhotos);
+        }
 
         function setupDropZone(dropZone, input, onFiles) {
             dropZone.addEventListener('click', () => input.click());
@@ -442,6 +568,7 @@
                 pdfDropZone.classList.add('has-file');
                 pdfFileInfo.classList.remove('hidden');
                 pdfFileInfo.innerHTML = `✓ ${pdf.name} (${(pdf.size / 1024).toFixed(1)} KB)`;
+                updateSubmitButton();
             }
         }
 
@@ -455,6 +582,7 @@
             });
 
             updatePhotosUI();
+            updateSubmitButton();
         }
 
         function updatePhotosUI() {
@@ -494,19 +622,31 @@
         function removePhoto(index) {
             selectedPhotos.splice(index, 1);
             updatePhotosUI();
+            updateSubmitButton();
         }
 
         function showStatus(message, type) {
             statusMessage.className = `status-message ${type}`;
-            statusMessage.textContent = message;
+            statusMessage.innerHTML = type === 'loading' 
+                ? `<span class="loading-spinner"></span>${message}`
+                : message;
             statusMessage.classList.remove('hidden');
         }
 
         setupDropZone(pdfDropZone, pdfInput, handlePdfFile);
         setupDropZone(photosDropZone, photosInput, handlePhotoFiles);
 
+        document.getElementById('carrier').addEventListener('input', updateSubmitButton);
+        document.getElementById('materialsCost').addEventListener('input', updateSubmitButton);
+        document.getElementById('laborCost').addEventListener('input', updateSubmitButton);
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            if (!selectedContact) {
+                showStatus('Please select a contact', 'error');
+                return;
+            }
 
             if (!pdfInput.files[0]) {
                 showStatus('Please upload an insurance estimate PDF', 'error');
@@ -529,10 +669,19 @@
                 formData.append('photos', photo);
             });
 
+            const fullAddress = [
+                selectedContact.address,
+                selectedContact.city,
+                selectedContact.state,
+                selectedContact.zip
+            ].filter(Boolean).join(', ');
+
             formData.append('metadata', JSON.stringify({
                 carrier: document.getElementById('carrier').value,
-                insured_name: document.getElementById('insuredName').value,
-                property_address: document.getElementById('propertyAddress').value,
+                insured_name: selectedContact.name,
+                property_address: fullAddress,
+                contact_id: selectedContact.id,
+                state: selectedContact.state,
             }));
 
             formData.append('costs', JSON.stringify({
@@ -550,20 +699,15 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    showStatus(`Job created successfully! Job ID: ${data.job_id}. Status: ${data.status}`, 'success');
-                    
-                    if (data.links?.status) {
-                        setTimeout(() => {
-                            pollJobStatus(data.job_id);
-                        }, 2000);
-                    }
+                    showStatus(`Job created! ID: ${data.job_id}. Processing...`, 'loading');
+                    pollJobStatus(data.job_id);
                 } else {
                     const errorMsg = data.detail?.message || data.detail || 'Upload failed';
                     showStatus(`Error: ${errorMsg}`, 'error');
+                    submitBtn.disabled = false;
                 }
             } catch (err) {
                 showStatus(`Network error: ${err.message}`, 'error');
-            } finally {
                 submitBtn.disabled = false;
             }
         });
@@ -574,17 +718,25 @@
                 const data = await response.json();
 
                 if (data.status === 'completed') {
-                    showStatus(`Job completed! View report at: ${API_BASE}/v1/jobs/${jobId}/report`, 'success');
+                    showStatus(
+                        `Job completed! <a href="${API_BASE}/v1/jobs/${jobId}/report" target="_blank" style="color: inherit; font-weight: 600;">Download Report</a>`,
+                        'success'
+                    );
+                    submitBtn.disabled = false;
                 } else if (data.status === 'failed' || data.status === 'escalated') {
                     showStatus(`Job ${data.status}. ${data.escalation_reason || ''}`, 'error');
+                    submitBtn.disabled = false;
                 } else {
                     showStatus(`Processing... Status: ${data.status}`, 'loading');
                     setTimeout(() => pollJobStatus(jobId), 5000);
                 }
             } catch (err) {
                 console.error('Poll error:', err);
+                setTimeout(() => pollJobStatus(jobId), 5000);
             }
         }
+
+        loadContacts();
     </script>
 </body>
 </html>
