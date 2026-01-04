@@ -20,13 +20,13 @@ class JobStore:
         targets = job_data.get("targets", {})
 
         photos_for_db = []
-        for photo in job_data.get("photos", []):
+        for photo in job_data.get("_photos", []):
             photos_for_db.append(
                 {
                     "photo_id": photo.get("photo_id"),
                     "filename": photo.get("filename"),
                     "mime_type": photo.get("content_type", "image/jpeg"),
-                    "binary_base64": base64.b64encode(photo.get("content", b"")).decode(
+                    "binary_base64": base64.b64encode(photo.get("binary", b"")).decode(
                         "utf-8"
                     ),
                 }
@@ -40,17 +40,22 @@ class JobStore:
             labor_cost=Decimal(str(costs.get("labor_cost", 0))),
             other_costs=Decimal(str(costs.get("other_costs", 0))),
             minimum_margin=Decimal(str(targets.get("minimum_margin", 0.33))),
-            estimate_pdf=job_data.get("estimate_pdf", b""),
+            estimate_pdf=job_data.get("_pdf_binary", b""),
             photos=photos_for_db,
         )
+
+        from datetime import datetime, timezone
 
         return {
             "job_id": str(job_id),
             "status": "queued",
             "metadata": metadata,
+            "created_at": datetime.now(timezone.utc).isoformat() + "Z",
         }
 
-    async def get(self, job_id: str) -> dict[str, Any] | None:
+    async def get(
+        self, job_id: str, include_binaries: bool = False
+    ) -> dict[str, Any] | None:
         try:
             job_uuid = UUID(job_id)
         except ValueError:
@@ -60,7 +65,7 @@ class JobStore:
         if record is None:
             return None
 
-        return self._record_to_dict(record)
+        return self._record_to_dict(record, include_binaries=include_binaries)
 
     async def update(
         self,
@@ -101,7 +106,7 @@ class JobStore:
     async def count(self, status: str | None = None) -> int:
         return await self.repo.count(status=status)
 
-    def _record_to_dict(self, record) -> dict[str, Any]:
+    def _record_to_dict(self, record, include_binaries: bool = False) -> dict[str, Any]:
         result = {
             "job_id": str(record.id),
             "status": record.status,
@@ -132,6 +137,20 @@ class JobStore:
 
         if record.result:
             result["result"] = record.result
+
+        if include_binaries:
+            result["_pdf_binary"] = record.estimate_pdf
+            photos = []
+            for p in record.photos or []:
+                photo_data = {
+                    "photo_id": p.get("photo_id"),
+                    "filename": p.get("filename"),
+                    "content_type": p.get("mime_type", "image/jpeg"),
+                }
+                if "binary_base64" in p:
+                    photo_data["binary"] = base64.b64decode(p["binary_base64"])
+                photos.append(photo_data)
+            result["_photos"] = photos
 
         return result
 

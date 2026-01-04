@@ -117,9 +117,10 @@ class OpenAIClient(LLMClient):
                 }
             )
 
+        url = f"{self.base_url}/chat/completions"
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
-                f"{self.base_url}/chat/completions",
+                url,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
@@ -134,6 +135,13 @@ class OpenAIClient(LLMClient):
                     "max_tokens": 4096,
                 },
             )
+            if response.status_code != 200:
+                import logging
+
+                logging.error(
+                    f"OpenAI vision request failed: {response.status_code} to {url}"
+                )
+                logging.error(f"Response body: {response.text[:1000]}")
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
 

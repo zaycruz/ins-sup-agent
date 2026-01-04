@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -26,6 +27,18 @@ class JobRecord:
 
     @classmethod
     def from_row(cls, row) -> JobRecord:
+        photos_raw = row["photos"]
+        if isinstance(photos_raw, str):
+            photos = json.loads(photos_raw) if photos_raw else []
+        else:
+            photos = photos_raw or []
+
+        result_raw = row["result"]
+        if isinstance(result_raw, str):
+            result = json.loads(result_raw) if result_raw else None
+        else:
+            result = result_raw
+
         return cls(
             id=row["id"],
             status=row["status"],
@@ -37,8 +50,8 @@ class JobRecord:
             other_costs=row["other_costs"],
             minimum_margin=row["minimum_margin"],
             estimate_pdf=row["estimate_pdf"],
-            photos=row["photos"] or [],
-            result=row["result"],
+            photos=photos,
+            result=result,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

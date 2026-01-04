@@ -164,10 +164,21 @@ async def process_job(job_id: str) -> None:
         Photo,
     )
 
-    job_data = await job_store.get(job_id)
+    logger.info(f"Starting to process job {job_id}")
+
+    try:
+        job_data = await job_store.get(job_id, include_binaries=True)
+    except Exception as e:
+        logger.exception(f"Failed to get job {job_id}: {e}")
+        return
+
     if not job_data:
         logger.error(f"Job {job_id} not found for processing")
         return
+
+    logger.info(
+        f"Job {job_id} has {len(job_data.get('_photos', []))} photos and {len(job_data.get('_pdf_binary', b''))} byte PDF"
+    )
 
     await job_store.update(job_id, {"status": "processing", "stage": "preparing"})
 

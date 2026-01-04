@@ -45,7 +45,7 @@ class VisionEvidenceAgent(BaseAgent[VisionEvidence]):
                 system=system_prompt,
                 user=user_prompt,
                 images=images,
-                model=context.get("model", "default"),
+                model=context.get("model"),
             )
 
             cleaned_response = self._extract_json_from_response(response)
