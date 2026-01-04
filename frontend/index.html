@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Supplement Upload</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #1a1a2e;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-title .step {
+            background: #4f46e5;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .input-prefix {
+            position: relative;
+        }
+
+        .input-prefix input {
+            padding-left: 2rem;
+        }
+
+        .input-prefix::before {
+            content: '$';
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+        }
+
+        .upload-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+
+        .upload-zone:hover {
+            border-color: #4f46e5;
+            background: #f5f3ff;
+        }
+
+        .upload-zone.dragover {
+            border-color: #4f46e5;
+            background: #ede9fe;
+        }
+
+        .upload-zone.has-file {
+            border-color: #10b981;
+            background: #ecfdf5;
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-text {
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+
+        .upload-text strong {
+            color: #4f46e5;
+        }
+
+        .file-info {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: #f0fdf4;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #166534;
+            font-size: 0.9rem;
+        }
+
+        .photos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .photo-preview {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f3f4f6;
+        }
+
+        .photo-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-preview .remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-preview .remove-btn:hover {
+            background: #dc2626;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.875rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: #4338ca;
+        }
+
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .status-message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+
+        .status-message.success {
+            background: #ecfdf5;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        .status-message.error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .status-message.loading {
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .photo-count {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 1rem;
+            }
+
+            .input-row {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Insurance Supplement Generator</h1>
+        <p class="subtitle">Upload your estimate and photos to generate a supplement</p>
+
+        <form id="uploadForm">
+            <div class="card">
+                <div class="card-title">
+                    <span class="step">1</span>
+                    Job Information
+                </div>
+                
+                <div class="form-group">
+                    <label for="carrier">Insurance Carrier</label>
+                    <input type="text" id="carrier" name="carrier" placeholder="e.g., State Farm, Allstate, USAA" required>
+                </div>
+
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="insuredName">Insured Name</label>
+                        <input type="text" id="insuredName" name="insuredName" placeholder="Property owner name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="propertyAddress">Property Address</label>
+                        <input type="text" id="propertyAddress" name="propertyAddress" placeholder="123 Main St, City, TX" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span class="step">2</span>
+                    Your Costs
+                </div>
+
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="materialsCost">Materials Cost</label>
+                        <div class="input-prefix">
+                            <input type="number" id="materialsCost" name="materialsCost" placeholder="0.00" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="laborCost">Labor Cost</label>
+                        <div class="input-prefix">
+                            <input type="number" id="laborCost" name="laborCost" placeholder="0.00" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="otherCosts">Other Costs (optional)</label>
+                    <div class="input-prefix">
+                        <input type="number" id="otherCosts" name="otherCosts" placeholder="0.00" step="0.01" min="0" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span class="step">3</span>
+                    Insurance Estimate (PDF)
+                </div>
+
+                <div class="upload-zone" id="pdfDropZone">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">
+                        <strong>Click to upload</strong> or drag and drop<br>
+                        PDF file only
+                    </div>
+                    <input type="file" id="estimatePdf" name="estimatePdf" accept=".pdf" class="hidden" required>
+                </div>
+                <div id="pdfFileInfo" class="file-info hidden"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span class="step">4</span>
+                    Job Photos
+                </div>
+
+                <div class="upload-zone" id="photosDropZone">
+                    <div class="upload-icon">📷</div>
+                    <div class="upload-text">
+                        <strong>Click to upload</strong> or drag and drop<br>
+                        JPG, PNG images (max 20 photos)
+                    </div>
+                    <input type="file" id="photos" name="photos" accept="image/*" multiple class="hidden" required>
+                </div>
+                <div id="photoCount" class="photo-count hidden"></div>
+                <div id="photosGrid" class="photos-grid"></div>
+            </div>
+
+            <div class="card">
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    Generate Supplement
+                </button>
+                <div id="statusMessage" class="status-message hidden"></div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8000' 
+            : '';
+
+        const form = document.getElementById('uploadForm');
+        const pdfDropZone = document.getElementById('pdfDropZone');
+        const photosDropZone = document.getElementById('photosDropZone');
+        const pdfInput = document.getElementById('estimatePdf');
+        const photosInput = document.getElementById('photos');
+        const pdfFileInfo = document.getElementById('pdfFileInfo');
+        const photosGrid = document.getElementById('photosGrid');
+        const photoCount = document.getElementById('photoCount');
+        const submitBtn = document.getElementById('submitBtn');
+        const statusMessage = document.getElementById('statusMessage');
+
+        let selectedPhotos = [];
+
+        function setupDropZone(dropZone, input, onFiles) {
+            dropZone.addEventListener('click', () => input.click());
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files);
+                onFiles(files);
+            });
+
+            input.addEventListener('change', () => {
+                const files = Array.from(input.files);
+                onFiles(files);
+            });
+        }
+
+        function handlePdfFile(files) {
+            const pdf = files.find(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
+            if (pdf) {
+                const dt = new DataTransfer();
+                dt.items.add(pdf);
+                pdfInput.files = dt.files;
+
+                pdfDropZone.classList.add('has-file');
+                pdfFileInfo.classList.remove('hidden');
+                pdfFileInfo.innerHTML = `✓ ${pdf.name} (${(pdf.size / 1024).toFixed(1)} KB)`;
+            }
+        }
+
+        function handlePhotoFiles(files) {
+            const images = files.filter(f => f.type.startsWith('image/'));
+            
+            images.forEach(img => {
+                if (selectedPhotos.length < 20 && !selectedPhotos.find(p => p.name === img.name)) {
+                    selectedPhotos.push(img);
+                }
+            });
+
+            updatePhotosUI();
+        }
+
+        function updatePhotosUI() {
+            const dt = new DataTransfer();
+            selectedPhotos.forEach(f => dt.items.add(f));
+            photosInput.files = dt.files;
+
+            if (selectedPhotos.length > 0) {
+                photosDropZone.classList.add('has-file');
+                photoCount.classList.remove('hidden');
+                photoCount.textContent = `${selectedPhotos.length} photo${selectedPhotos.length !== 1 ? 's' : ''} selected`;
+            } else {
+                photosDropZone.classList.remove('has-file');
+                photoCount.classList.add('hidden');
+            }
+
+            photosGrid.innerHTML = '';
+            selectedPhotos.forEach((file, index) => {
+                const div = document.createElement('div');
+                div.className = 'photo-preview';
+
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'remove-btn';
+                removeBtn.innerHTML = '×';
+                removeBtn.onclick = () => removePhoto(index);
+
+                div.appendChild(img);
+                div.appendChild(removeBtn);
+                photosGrid.appendChild(div);
+            });
+        }
+
+        function removePhoto(index) {
+            selectedPhotos.splice(index, 1);
+            updatePhotosUI();
+        }
+
+        function showStatus(message, type) {
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden');
+        }
+
+        setupDropZone(pdfDropZone, pdfInput, handlePdfFile);
+        setupDropZone(photosDropZone, photosInput, handlePhotoFiles);
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!pdfInput.files[0]) {
+                showStatus('Please upload an insurance estimate PDF', 'error');
+                return;
+            }
+
+            if (selectedPhotos.length === 0) {
+                showStatus('Please upload at least one job photo', 'error');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            showStatus('Uploading and processing... This may take a few minutes.', 'loading');
+
+            const formData = new FormData();
+            
+            formData.append('estimate_pdf', pdfInput.files[0]);
+            
+            selectedPhotos.forEach(photo => {
+                formData.append('photos', photo);
+            });
+
+            formData.append('metadata', JSON.stringify({
+                carrier: document.getElementById('carrier').value,
+                insured_name: document.getElementById('insuredName').value,
+                property_address: document.getElementById('propertyAddress').value,
+            }));
+
+            formData.append('costs', JSON.stringify({
+                materials_cost: parseFloat(document.getElementById('materialsCost').value) || 0,
+                labor_cost: parseFloat(document.getElementById('laborCost').value) || 0,
+                other_costs: parseFloat(document.getElementById('otherCosts').value) || 0,
+            }));
+
+            try {
+                const response = await fetch(`${API_BASE}/v1/jobs`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus(`Job created successfully! Job ID: ${data.job_id}. Status: ${data.status}`, 'success');
+                    
+                    if (data.links?.status) {
+                        setTimeout(() => {
+                            pollJobStatus(data.job_id);
+                        }, 2000);
+                    }
+                } else {
+                    const errorMsg = data.detail?.message || data.detail || 'Upload failed';
+                    showStatus(`Error: ${errorMsg}`, 'error');
+                }
+            } catch (err) {
+                showStatus(`Network error: ${err.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        async function pollJobStatus(jobId) {
+            try {
+                const response = await fetch(`${API_BASE}/v1/jobs/${jobId}`);
+                const data = await response.json();
+
+                if (data.status === 'completed') {
+                    showStatus(`Job completed! View report at: ${API_BASE}/v1/jobs/${jobId}/report`, 'success');
+                } else if (data.status === 'failed' || data.status === 'escalated') {
+                    showStatus(`Job ${data.status}. ${data.escalation_reason || ''}`, 'error');
+                } else {
+                    showStatus(`Processing... Status: ${data.status}`, 'loading');
+                    setTimeout(() => pollJobStatus(jobId), 5000);
+                }
+            } catch (err) {
+                console.error('Poll error:', err);
+            }
+        }
+    </script>
+</body>
+</html>
