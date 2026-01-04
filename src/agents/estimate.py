@@ -36,14 +36,16 @@ class EstimateInterpreterAgent(BaseAgent[EstimateInterpretation]):
             system_prompt = self.get_system_prompt()
             user_prompt = self.format_user_prompt(context)
 
-            response = await self.llm.complete(
+            schema = EstimateInterpretation.model_json_schema()
+            response = await self.llm.complete_structured(
                 system=system_prompt,
                 user=user_prompt,
-                model=context.get("model", "default"),
+                response_schema=schema,
+                schema_name="estimate_interpretation",
+                model=context.get("model"),
             )
 
-            cleaned_response = self._extract_json_from_response(response)
-            result = self._parse_response(cleaned_response, EstimateInterpretation)
+            result = self._parse_response(response, EstimateInterpretation)
 
             self.logger.info(
                 f"Parsed {len(result.line_items)} line items, "

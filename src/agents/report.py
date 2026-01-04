@@ -78,7 +78,7 @@ class ReportGeneratorAgent(BaseAgent[ReportOutput]):
             response = await self.llm.complete(
                 system=system_prompt,
                 user=user_prompt,
-                model=context.get("model", "default"),
+                model=context.get("model"),
             )
 
             html_content = self._extract_html_from_response(response)

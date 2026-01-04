@@ -33,14 +33,16 @@ class GapAnalysisAgent(BaseAgent[GapAnalysis]):
             system_prompt = self.get_system_prompt()
             user_prompt = self.format_user_prompt(context)
 
-            response = await self.llm.complete(
+            schema = GapAnalysis.model_json_schema()
+            response = await self.llm.complete_structured(
                 system=system_prompt,
                 user=user_prompt,
-                model=context.get("model", "default"),
+                response_schema=schema,
+                schema_name="gap_analysis",
+                model=context.get("model"),
             )
 
-            cleaned_response = self._extract_json_from_response(response)
-            result = self._parse_response(cleaned_response, GapAnalysis)
+            result = self._parse_response(response, GapAnalysis)
 
             summary = result.coverage_summary
             self.logger.info(

@@ -77,12 +77,32 @@ class JobStore:
         except ValueError:
             return None
 
-        if "status" in updates and "result" in updates:
-            await self.repo.update_result(
-                job_uuid, updates["status"], updates["result"]
-            )
-        elif "status" in updates:
-            await self.repo.update_status(job_uuid, updates["status"])
+        status = updates.get("status")
+
+        result_data: dict[str, Any] = {}
+        if "results" in updates and updates["results"]:
+            result_data.update(updates["results"])
+        if "stage" in updates:
+            result_data["stage"] = updates["stage"]
+        if "completed_at" in updates:
+            result_data["completed_at"] = updates["completed_at"]
+        if "escalation_reason" in updates:
+            result_data["escalation_reason"] = updates["escalation_reason"]
+        if "human_flags" in updates:
+            result_data["human_flags"] = updates["human_flags"]
+        if "error" in updates:
+            result_data["error"] = updates["error"]
+        if "_report_html" in updates and updates["_report_html"]:
+            result_data["report_html"] = updates["_report_html"]
+        if "_report_pdf" in updates and updates["_report_pdf"]:
+            result_data["report_pdf_base64"] = base64.b64encode(
+                updates["_report_pdf"]
+            ).decode("utf-8")
+
+        if status and result_data:
+            await self.repo.update_result(job_uuid, status, result_data)
+        elif status:
+            await self.repo.update_status(job_uuid, status)
 
         return await self.get(job_id)
 
@@ -136,7 +156,34 @@ class JobStore:
         }
 
         if record.result:
-            result["result"] = record.result
+            if "stage" in record.result:
+                result["stage"] = record.result["stage"]
+            if "completed_at" in record.result:
+                result["completed_at"] = record.result["completed_at"]
+            if "escalation_reason" in record.result:
+                result["escalation_reason"] = record.result["escalation_reason"]
+            if "human_flags" in record.result:
+                result["human_flags"] = record.result["human_flags"]
+            if "error" in record.result:
+                result["error"] = record.result["error"]
+            if "report_html" in record.result:
+                result["_report_html"] = record.result["report_html"]
+            if "report_pdf_base64" in record.result:
+                result["_report_pdf"] = base64.b64decode(
+                    record.result["report_pdf_base64"]
+                )
+            results_subset = {}
+            for key in [
+                "supplement_total",
+                "supplement_count",
+                "processing_time_seconds",
+                "llm_calls",
+                "review_cycles",
+            ]:
+                if key in record.result:
+                    results_subset[key] = record.result[key]
+            if results_subset:
+                result["results"] = results_subset
 
         if include_binaries:
             result["_pdf_binary"] = record.estimate_pdf

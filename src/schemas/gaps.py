@@ -18,6 +18,13 @@ class ScopeGap(BaseModel):
         "measurement_discrepancy",
         "material_upgrade_needed",
         "labor_underestimated",
+        "insufficient_quantity",
+        "material_mismatch",
+        "hidden_damage",
+        "access_issue",
+        "scope_expansion",
+        "quality_upgrade",
+        "safety_requirement",
         "other",
     ] = Field(description="Category of the gap")
     severity: Literal["critical", "major", "minor"] = Field(

@@ -41,15 +41,17 @@ class VisionEvidenceAgent(BaseAgent[VisionEvidence]):
 
             images = [image_bytes] if isinstance(image_bytes, bytes) else image_bytes
 
-            response = await self.llm.complete_vision(
+            schema = VisionEvidence.model_json_schema()
+            response = await self.llm.complete_vision_structured(
                 system=system_prompt,
                 user=user_prompt,
                 images=images,
+                response_schema=schema,
+                schema_name="vision_evidence",
                 model=context.get("model"),
             )
 
-            cleaned_response = self._extract_json_from_response(response)
-            result = self._parse_response(cleaned_response, VisionEvidence)
+            result = self._parse_response(response, VisionEvidence)
 
             self.logger.info(
                 f"Detected {len(result.components)} components, "

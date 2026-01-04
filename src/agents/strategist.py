@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from src.agents.base import BaseAgent
@@ -90,7 +91,7 @@ class SupplementStrategistAgent(BaseAgent[SupplementStrategy]):
                 system=system_prompt,
                 user=user_prompt,
                 tools=self.tools,
-                model=context.get("model", "default"),
+                model=context.get("model"),
             )
 
             tool_calls = response.get("tool_calls", [])
@@ -101,13 +102,23 @@ class SupplementStrategistAgent(BaseAgent[SupplementStrategy]):
                     system_prompt, user_prompt, tool_results, context
                 )
 
-            content = (
-                response.get("content", response)
-                if isinstance(response, dict)
-                else response
-            )
-            cleaned_response = self._extract_json_from_response(str(content))
-            result = self._parse_response(cleaned_response, SupplementStrategy)
+            if not tool_calls:
+                schema = SupplementStrategy.model_json_schema()
+                response = await self.llm.complete_structured(
+                    system=system_prompt,
+                    user=user_prompt,
+                    response_schema=schema,
+                    schema_name="supplement_strategy",
+                    model=context.get("model"),
+                )
+                content = response
+            else:
+                content = (
+                    response.get("content", response)
+                    if isinstance(response, dict)
+                    else response
+                )
+            result = self._parse_response(str(content), SupplementStrategy)
 
             margin = result.margin_analysis
             self.logger.info(
@@ -128,7 +139,8 @@ class SupplementStrategistAgent(BaseAgent[SupplementStrategy]):
         results = []
         for call in tool_calls:
             func_name = call.get("function", {}).get("name")
-            args = call.get("function", {}).get("arguments", {})
+            args_raw = call.get("function", {}).get("arguments", "{}")
+            args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
 
             if func_name == "lookup_building_code":
                 result = await self._lookup_building_code(
@@ -196,9 +208,12 @@ class SupplementStrategistAgent(BaseAgent[SupplementStrategy]):
         )
         augmented_prompt = f"{user_prompt}\n\n## Tool Results\n{results_text}"
 
-        response = await self.llm.complete(
+        schema = SupplementStrategy.model_json_schema()
+        response = await self.llm.complete_structured(
             system=system_prompt,
             user=augmented_prompt,
-            model=context.get("model", "default"),
+            response_schema=schema,
+            schema_name="supplement_strategy",
+            model=context.get("model"),
         )
         return {"content": response}

@@ -119,10 +119,10 @@ class Orchestrator:
             review_loop = ReviewLoop(self)
             review_result = await review_loop.execute()
 
-            if review_result.approved and review_result.ready_for_delivery:
-                return await self._generate_report(start_time)
-            else:
-                return self._create_escalation_result(review_result, start_time)
+            result = await self._generate_report(start_time)
+            if not review_result.approved or not review_result.ready_for_delivery:
+                result.human_flags = review_result.human_flags
+            return result
 
         except Exception as e:
             self.logger.exception("Orchestrator failed")
