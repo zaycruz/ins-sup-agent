@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     default_margin_target: float = 0.33
     default_currency: str = "USD"
 
+    # Database
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/ins_sup_agent"
+
     # Logging
     log_level: str = "INFO"
 

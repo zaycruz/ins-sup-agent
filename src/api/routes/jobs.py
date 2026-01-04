@@ -86,7 +86,7 @@ async def create_job(
             detail={"code": "INVALID_JSON", "message": f"Invalid targets JSON: {e}"},
         )
 
-    required_metadata = ["carrier", "claim_number", "insured_name", "property_address"]
+    required_metadata = ["carrier", "insured_name", "property_address"]
     missing = [f for f in required_metadata if f not in metadata_dict]
     if missing:
         raise HTTPException(

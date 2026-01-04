@@ -1,10 +1,21 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import health, jobs
+from src.db.connection import init_db, close_pool
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+    await close_pool()
 
 
 app = FastAPI(
+    lifespan=lifespan,
     title="Insurance Supplementation Agent System",
     description="Multi-agent AI system for roofing insurance supplement generation",
     version="1.0.0",

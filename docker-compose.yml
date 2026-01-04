@@ -1,6 +1,23 @@
 version: "3.8"
 
 services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ins_sup_agent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -8,11 +25,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - VISION_PROVIDER=${VISION_PROVIDER:-openai}
+      - TEXT_PROVIDER=${TEXT_PROVIDER:-anthropic}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - VISION_MODEL=${VISION_MODEL:-gpt-4o}
-      - TEXT_MODEL=${TEXT_MODEL:-gpt-4o}
+      - TEXT_MODEL=${TEXT_MODEL:-claude-sonnet-4-5}
+      - REVIEW_MODEL=${REVIEW_MODEL:-claude-opus-4-5}
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ins_sup_agent
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -21,6 +41,9 @@ services:
       - MAX_PHOTOS=${MAX_PHOTOS:-20}
     volumes:
       - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -29,21 +52,5 @@ services:
       retries: 3
       start_period: 10s
 
-  api-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: base
-    ports:
-      - "8000:8000"
-    environment:
-      - LLM_PROVIDER=mock
-      - LOG_LEVEL=DEBUG
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-    volumes:
-      - .:/app
-      - /app/.venv
-    command: ["uv", "run", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-    profiles:
-      - dev
+volumes:
+  postgres_data:

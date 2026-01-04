@@ -1,45 +1,85 @@
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime
+import base64
+import json
+from decimal import Decimal
 from typing import Any
-from uuid import uuid4
+from uuid import UUID
+
+from src.db.repositories.jobs import JobRepository
+from src.db.repositories.examples import ExampleRepository
 
 
 class JobStore:
     def __init__(self) -> None:
-        self.jobs: dict[str, dict[str, Any]] = {}
-        self.lock = asyncio.Lock()
+        self.repo = JobRepository()
 
     async def create(self, job_data: dict[str, Any]) -> dict[str, Any]:
-        async with self.lock:
-            job_id = f"job_{uuid4().hex[:12]}"
-            now = datetime.utcnow().isoformat() + "Z"
-            job = {
-                "job_id": job_id,
-                "status": "queued",
-                "stage": None,
-                "created_at": now,
-                "updated_at": now,
-                **job_data,
-            }
-            self.jobs[job_id] = job
-            return job
+        metadata = job_data.get("metadata", {})
+        costs = job_data.get("costs", {})
+        targets = job_data.get("targets", {})
+
+        photos_for_db = []
+        for photo in job_data.get("photos", []):
+            photos_for_db.append(
+                {
+                    "photo_id": photo.get("photo_id"),
+                    "filename": photo.get("filename"),
+                    "mime_type": photo.get("content_type", "image/jpeg"),
+                    "binary_base64": base64.b64encode(photo.get("content", b"")).decode(
+                        "utf-8"
+                    ),
+                }
+            )
+
+        job_id = await self.repo.create(
+            carrier=metadata.get("carrier", ""),
+            insured_name=metadata.get("insured_name", ""),
+            property_address=metadata.get("property_address", ""),
+            materials_cost=Decimal(str(costs.get("materials_cost", 0))),
+            labor_cost=Decimal(str(costs.get("labor_cost", 0))),
+            other_costs=Decimal(str(costs.get("other_costs", 0))),
+            minimum_margin=Decimal(str(targets.get("minimum_margin", 0.33))),
+            estimate_pdf=job_data.get("estimate_pdf", b""),
+            photos=photos_for_db,
+        )
+
+        return {
+            "job_id": str(job_id),
+            "status": "queued",
+            "metadata": metadata,
+        }
 
     async def get(self, job_id: str) -> dict[str, Any] | None:
-        return self.jobs.get(job_id)
+        try:
+            job_uuid = UUID(job_id)
+        except ValueError:
+            return None
+
+        record = await self.repo.get(job_uuid)
+        if record is None:
+            return None
+
+        return self._record_to_dict(record)
 
     async def update(
         self,
         job_id: str,
         updates: dict[str, Any],
     ) -> dict[str, Any] | None:
-        async with self.lock:
-            if job_id in self.jobs:
-                self.jobs[job_id].update(updates)
-                self.jobs[job_id]["updated_at"] = datetime.utcnow().isoformat() + "Z"
-                return self.jobs[job_id]
-        return None
+        try:
+            job_uuid = UUID(job_id)
+        except ValueError:
+            return None
+
+        if "status" in updates and "result" in updates:
+            await self.repo.update_result(
+                job_uuid, updates["status"], updates["result"]
+            )
+        elif "status" in updates:
+            await self.repo.update_status(job_uuid, updates["status"])
+
+        return await self.get(job_id)
 
     async def list_jobs(
         self,
@@ -48,30 +88,83 @@ class JobStore:
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        results = list(self.jobs.values())
-
-        if status:
-            results = [j for j in results if j.get("status") == status]
-
-        if carrier:
-            results = [
-                j for j in results if j.get("metadata", {}).get("carrier") == carrier
-            ]
-
-        results.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return results[offset : offset + limit]
+        records = await self.repo.list_jobs(status=status, limit=limit, offset=offset)
+        return [self._record_to_dict(r) for r in records]
 
     async def delete(self, job_id: str) -> bool:
-        async with self.lock:
-            if job_id in self.jobs:
-                del self.jobs[job_id]
-                return True
-        return False
+        try:
+            job_uuid = UUID(job_id)
+        except ValueError:
+            return False
+        return await self.repo.delete(job_uuid)
 
     async def count(self, status: str | None = None) -> int:
-        if status:
-            return len([j for j in self.jobs.values() if j.get("status") == status])
-        return len(self.jobs)
+        return await self.repo.count(status=status)
+
+    def _record_to_dict(self, record) -> dict[str, Any]:
+        result = {
+            "job_id": str(record.id),
+            "status": record.status,
+            "metadata": {
+                "carrier": record.carrier,
+                "insured_name": record.insured_name,
+                "property_address": record.property_address,
+            },
+            "costs": {
+                "materials_cost": float(record.materials_cost)
+                if record.materials_cost
+                else 0,
+                "labor_cost": float(record.labor_cost) if record.labor_cost else 0,
+                "other_costs": float(record.other_costs) if record.other_costs else 0,
+            },
+            "targets": {
+                "minimum_margin": float(record.minimum_margin)
+                if record.minimum_margin
+                else 0.33,
+            },
+            "created_at": record.created_at.isoformat() + "Z"
+            if record.created_at
+            else None,
+            "updated_at": record.updated_at.isoformat() + "Z"
+            if record.updated_at
+            else None,
+        }
+
+        if record.result:
+            result["result"] = record.result
+
+        return result
+
+
+class ExampleStore:
+    def __init__(self) -> None:
+        self.repo = ExampleRepository()
+
+    async def get_by_carrier(
+        self, carrier: str, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        records = await self.repo.get_by_carrier(carrier, limit)
+        return [
+            {
+                "id": str(r.id),
+                "carrier": r.carrier,
+                "insurance_estimate": r.insurance_estimate,
+                "supplementation": r.supplementation,
+            }
+            for r in records
+        ]
+
+    async def create(
+        self,
+        carrier: str,
+        insurance_estimate: str,
+        supplementation: str,
+    ) -> str:
+        example_id = await self.repo.create(
+            carrier, insurance_estimate, supplementation
+        )
+        return str(example_id)
 
 
 job_store = JobStore()
+example_store = ExampleStore()
