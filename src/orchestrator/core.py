@@ -15,6 +15,7 @@ from src.agents import (
     SupplementStrategistAgent,
     VisionEvidenceAgent,
 )
+from src.agents.vision_aggregator import VisionAggregator
 from src.llm.client import LLMClient
 from src.orchestrator.context import OrchestratorContext
 from src.schemas.estimate import EstimateInterpretation
@@ -84,6 +85,8 @@ class Orchestrator:
             )
 
         self.llm = text_llm
+        secondary_vision = self._create_secondary_vision_client()
+        self.vision_aggregator = VisionAggregator(vision_llm, secondary_vision)
         self.vision_agent = VisionEvidenceAgent(vision_llm)
         self.estimate_agent = EstimateInterpreterAgent(text_llm)
         self.gap_agent = GapAnalysisAgent(text_llm)
@@ -105,6 +108,16 @@ class Orchestrator:
         from src.llm import get_review_client
 
         return get_review_client()
+
+    def _create_secondary_vision_client(self) -> LLMClient | None:
+        from src.config import settings
+
+        if not settings.google_api_key:
+            return None
+
+        from src.llm import get_gemini_vision_client
+
+        return get_gemini_vision_client()
 
     async def run(self) -> OrchestratorResult:
         start_time = time.time()
@@ -165,7 +178,9 @@ class Orchestrator:
             "roof_squares": 0.0,
         }
         self.llm_call_count += 1
-        return await self.vision_agent.run(context)
+        if self.vision_aggregator.secondary_agent:
+            self.llm_call_count += 1
+        return await self.vision_aggregator.run(context)
 
     async def _run_estimate_interpreter(
         self,

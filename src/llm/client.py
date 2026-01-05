@@ -597,6 +597,192 @@ class AnthropicClient(LLMClient):
             raise ValueError("No structured output returned from Anthropic")
 
 
+class GeminiClient(LLMClient):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        default_model: str = "gemini-2.0-flash",
+    ) -> None:
+        self.api_key = api_key or os.getenv("GOOGLE_API_KEY", "")
+        self.default_model = default_model
+
+        if not self.api_key:
+            raise ValueError("Google API key is required")
+
+    def _detect_mime_type(self, image_bytes: bytes) -> str:
+        if image_bytes[:4] == b"\x89PNG":
+            return "image/png"
+        elif image_bytes[:2] == b"\xff\xd8":
+            return "image/jpeg"
+        elif (
+            image_bytes[:4] == b"RIFF"
+            and len(image_bytes) > 12
+            and image_bytes[8:12] == b"WEBP"
+        ):
+            return "image/webp"
+        elif image_bytes[:4] == b"GIF8":
+            return "image/gif"
+        return "image/jpeg"
+
+    async def complete(
+        self,
+        system: str,
+        user: str,
+        model: str | None = None,
+    ) -> str:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=self.api_key)
+        response = client.models.generate_content(
+            model=model or self.default_model,
+            contents=[user],
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                response_mime_type="application/json",
+            ),
+        )
+        return response.text or ""
+
+    async def complete_vision(
+        self,
+        system: str,
+        user: str,
+        images: list[bytes],
+        model: str | None = None,
+    ) -> str:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=self.api_key)
+        content: list[str | types.Part] = [user]
+
+        for img in images:
+            content.append(
+                types.Part.from_bytes(data=img, mime_type=self._detect_mime_type(img))
+            )
+
+        response = client.models.generate_content(
+            model=model or self.default_model,
+            contents=content,
+            config=types.GenerateContentConfig(system_instruction=system),
+        )
+        return response.text or ""
+
+    async def complete_with_tools(
+        self,
+        system: str,
+        user: str,
+        tools: list[dict[str, Any]],
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        from google import genai
+        from google.genai import types
+
+        gemini_tools = []
+        for tool in tools:
+            if tool.get("type") == "function":
+                func = tool["function"]
+                gemini_tools.append(
+                    types.Tool(
+                        function_declarations=[
+                            types.FunctionDeclaration(
+                                name=func["name"],
+                                description=func.get("description", ""),
+                                parameters=func.get("parameters", {}),
+                            )
+                        ]
+                    )
+                )
+
+        client = genai.Client(api_key=self.api_key)
+        response = client.models.generate_content(
+            model=model or self.default_model,
+            contents=[user],
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                tools=gemini_tools if gemini_tools else None,
+            ),
+        )
+
+        tool_calls: list[dict[str, Any]] = []
+        content = ""
+
+        if response.candidates and response.candidates[0].content:
+            for part in response.candidates[0].content.parts or []:
+                if hasattr(part, "text") and part.text:
+                    content = part.text
+                elif hasattr(part, "function_call") and part.function_call:
+                    fc = part.function_call
+                    tool_calls.append(
+                        {
+                            "id": fc.name,
+                            "function": {
+                                "name": fc.name,
+                                "arguments": json.dumps(
+                                    dict(fc.args) if fc.args else {}
+                                ),
+                            },
+                        }
+                    )
+
+        return {"content": content, "tool_calls": tool_calls}
+
+    async def complete_structured(
+        self,
+        system: str,
+        user: str,
+        response_schema: dict[str, Any],
+        schema_name: str = "response",
+        model: str | None = None,
+    ) -> str:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=self.api_key)
+        response = client.models.generate_content(
+            model=model or self.default_model,
+            contents=[user],
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                response_mime_type="application/json",
+                response_schema=response_schema,
+            ),
+        )
+        return response.text or ""
+
+    async def complete_vision_structured(
+        self,
+        system: str,
+        user: str,
+        images: list[bytes],
+        response_schema: dict[str, Any],
+        schema_name: str = "response",
+        model: str | None = None,
+    ) -> str:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=self.api_key)
+        content: list[str | types.Part] = [user]
+
+        for img in images:
+            content.append(
+                types.Part.from_bytes(data=img, mime_type=self._detect_mime_type(img))
+            )
+
+        response = client.models.generate_content(
+            model=model or self.default_model,
+            contents=content,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                response_mime_type="application/json",
+                response_schema=response_schema,
+            ),
+        )
+        return response.text or ""
+
+
 def get_vision_client() -> LLMClient:
     from src.config import settings
 
@@ -614,8 +800,22 @@ def get_vision_client() -> LLMClient:
             default_model=settings.vision_model,
             base_url=settings.anthropic_base_url,
         )
+    elif provider.lower() == "gemini" or provider.lower() == "google":
+        return GeminiClient(
+            api_key=settings.google_api_key,
+            default_model=settings.vision_model,
+        )
     else:
         raise ValueError(f"Unknown vision provider: {provider}")
+
+
+def get_gemini_vision_client() -> LLMClient:
+    from src.config import settings
+
+    return GeminiClient(
+        api_key=settings.google_api_key,
+        default_model="gemini-2.0-flash",
+    )
 
 
 def get_text_client() -> LLMClient:
