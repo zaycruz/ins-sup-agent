@@ -1,37 +1,18 @@
 from __future__ import annotations
 
-from typing import Literal
 from pydantic import BaseModel, Field
 
 
 class SupplementProposal(BaseModel):
-    """A proposed supplement item to request from the insurance carrier."""
-
     supplement_id: str = Field(description="Unique identifier for this supplement")
-    type: Literal[
-        "new_line_item",
-        "quantity_increase",
-        "price_adjustment",
-        "code_requirement",
-        "material_upgrade",
-        "additional_labor",
-        "missed_component",
-        "other",
-    ] = Field(description="Type of supplement being proposed")
+    type: str = Field(description="Type of supplement being proposed")
     line_item_description: str = Field(
         description="Description of the line item to add or modify"
     )
     justification: str = Field(
         description="Detailed justification for why this supplement is needed"
     )
-    source: Literal[
-        "photo_evidence",
-        "code_requirement",
-        "industry_standard",
-        "measurement_correction",
-        "material_specification",
-        "labor_requirement",
-    ] = Field(description="Primary source/basis for this supplement")
+    source: str = Field(description="Primary source/basis for this supplement")
     linked_gaps: list[str] = Field(
         default_factory=list,
         description="Gap IDs that this supplement addresses",
@@ -53,12 +34,8 @@ class SupplementProposal(BaseModel):
     confidence: float = Field(
         ge=0.0, le=1.0, description="Confidence this supplement will be approved (0-1)"
     )
-    pushback_risk: Literal["low", "medium", "high"] = Field(
-        description="Expected level of pushback from carrier"
-    )
-    priority: Literal["critical", "high", "medium", "low"] = Field(
-        description="Priority for including this supplement"
-    )
+    pushback_risk: str = Field(description="Expected level of pushback from carrier")
+    priority: str = Field(description="Priority for including this supplement")
 
     model_config = {"json_schema_serialization_defaults_required": True}
 

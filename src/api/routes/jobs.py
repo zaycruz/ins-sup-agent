@@ -31,6 +31,17 @@ router = APIRouter()
 logger = logging.getLogger("api.jobs")
 
 
+VALID_VISION_FRAMEWORKS = [
+    "single_model",
+    "parallel_aggregate",
+    "consensus_debate",
+    "ensemble_voting",
+]
+VALID_ESTIMATE_FRAMEWORKS = ["single", "ensemble"]
+VALID_GAP_FRAMEWORKS = ["single", "consensus"]
+VALID_STRATEGIST_FRAMEWORKS = ["single", "consensus"]
+
+
 @router.post("/jobs", status_code=202, response_model=JobCreatedResponse)
 async def create_job(
     background_tasks: BackgroundTasks,
@@ -40,6 +51,22 @@ async def create_job(
     costs: str = Form(..., description="JSON costs"),
     targets: str | None = Form(None, description="JSON business targets"),
     callback_url: str | None = Form(None, description="Webhook URL for completion"),
+    vision_framework: str = Form(
+        "parallel_aggregate",
+        description="Vision framework: single_model, parallel_aggregate, consensus_debate, ensemble_voting",
+    ),
+    estimate_framework: str = Form(
+        "single",
+        description="Estimate framework: single, ensemble",
+    ),
+    gap_framework: str = Form(
+        "single",
+        description="Gap analysis framework: single, consensus",
+    ),
+    strategist_framework: str = Form(
+        "single",
+        description="Strategist framework: single, consensus",
+    ),
 ) -> JobCreatedResponse:
     if not estimate_pdf.filename or not estimate_pdf.filename.lower().endswith(".pdf"):
         raise HTTPException(
@@ -47,10 +74,10 @@ async def create_job(
             detail={"code": "INVALID_FILE_TYPE", "message": "Estimate must be PDF"},
         )
 
-    if len(photos) > 20:
+    if len(photos) > 100:
         raise HTTPException(
             status_code=400,
-            detail={"code": "TOO_MANY_PHOTOS", "message": "Maximum 20 photos allowed"},
+            detail={"code": "TOO_MANY_PHOTOS", "message": "Maximum 100 photos allowed"},
         )
 
     if len(photos) < 1:
@@ -108,6 +135,42 @@ async def create_job(
             },
         )
 
+    if vision_framework not in VALID_VISION_FRAMEWORKS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_FRAMEWORK",
+                "message": f"Invalid vision_framework. Must be one of: {VALID_VISION_FRAMEWORKS}",
+            },
+        )
+
+    if estimate_framework not in VALID_ESTIMATE_FRAMEWORKS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_FRAMEWORK",
+                "message": f"Invalid estimate_framework. Must be one of: {VALID_ESTIMATE_FRAMEWORKS}",
+            },
+        )
+
+    if gap_framework not in VALID_GAP_FRAMEWORKS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_FRAMEWORK",
+                "message": f"Invalid gap_framework. Must be one of: {VALID_GAP_FRAMEWORKS}",
+            },
+        )
+
+    if strategist_framework not in VALID_STRATEGIST_FRAMEWORKS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_FRAMEWORK",
+                "message": f"Invalid strategist_framework. Must be one of: {VALID_STRATEGIST_FRAMEWORKS}",
+            },
+        )
+
     pdf_content = await estimate_pdf.read()
 
     photo_contents = []
@@ -134,6 +197,10 @@ async def create_job(
             "photo_count": len(photos),
             "_pdf_binary": pdf_content,
             "_photos": photo_contents,
+            "vision_framework": vision_framework,
+            "estimate_framework": estimate_framework,
+            "gap_framework": gap_framework,
+            "strategist_framework": strategist_framework,
         }
     )
 
@@ -226,7 +293,17 @@ async def process_job(job_id: str) -> None:
 
         await job_store.update(job_id, {"stage": "running_agents"})
 
-        orchestrator = Orchestrator(job)
+        vision_fw = job_data.get("vision_framework", "parallel_aggregate")
+        estimate_fw = job_data.get("estimate_framework", "single")
+        gap_fw = job_data.get("gap_framework", "single")
+        strategist_fw = job_data.get("strategist_framework", "single")
+        orchestrator = Orchestrator(
+            job,
+            vision_framework=vision_fw,
+            estimate_framework=estimate_fw,
+            gap_framework=gap_fw,
+            strategist_framework=strategist_fw,
+        )
         result = await orchestrator.run()
 
         supplement_total = 0.0

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -16,10 +17,30 @@ T = TypeVar("T", bound=BaseModel)
 class BaseAgent(ABC, Generic[T]):
     name: str
     version: str = "1.0.0"
+    max_retries: int = 3
+    retry_delay: float = 2.0
 
     def __init__(self, llm_client: LLMClient) -> None:
         self.llm = llm_client
         self.logger = logging.getLogger(f"agent.{self.name}")
+
+    async def run_with_retry(self, context: dict[str, Any]) -> T:
+        last_error: Exception | None = None
+
+        for attempt in range(self.max_retries):
+            try:
+                return await self.run(context)
+            except Exception as e:
+                last_error = e
+                if attempt < self.max_retries - 1:
+                    delay = self.retry_delay * (attempt + 1)
+                    self.logger.warning(
+                        f"{self.name} attempt {attempt + 1} failed: {e}. Retrying in {delay}s..."
+                    )
+                    await asyncio.sleep(delay)
+
+        self.logger.error(f"{self.name} failed after {self.max_retries} attempts")
+        raise last_error or Exception("Unknown error")
 
     @abstractmethod
     async def run(self, context: dict[str, Any]) -> T:

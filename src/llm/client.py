@@ -8,6 +8,9 @@ from typing import Any
 
 import httpx
 
+VISION_TIMEOUT = 300.0
+TEXT_TIMEOUT = 180.0
+
 
 class LLMClient(ABC):
     @abstractmethod

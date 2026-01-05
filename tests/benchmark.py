@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Cross-validation benchmark for supplement accuracy.
-Runs N iterations and calculates average precision, recall, F1, and value capture.
+Runs N iterations and calculates precision, recall, F1, MAE, and value metrics.
 """
 
 import asyncio
@@ -15,6 +15,10 @@ import httpx
 
 BASE_URL = "http://localhost:8000"
 TEST_DATA_DIR = Path("/home/zay/projects/ins-sup-agent/test-data/Clarivel Perez")
+
+ORIGINAL_ESTIMATE_RCV = 16415.92
+SUPPLEMENTED_ESTIMATE_RCV = 28958.38
+GROUND_TRUTH_SUPPLEMENT_AMOUNT = SUPPLEMENTED_ESTIMATE_RCV - ORIGINAL_ESTIMATE_RCV
 
 GROUND_TRUTH_ITEMS = [
     {
@@ -69,11 +73,11 @@ GROUND_TRUTH_ITEMS = [
         "id": "overhead_profit",
         "description": "Overhead & Profit",
         "rcv": 5580.86,
-        "keywords": ["overhead", "profit", "o&p", "o & p"],
+        "keywords": ["overhead", "profit", "o&p", "o & p", "gc", "contractor"],
     },
 ]
 
-GROUND_TRUTH_TOTAL = sum(item["rcv"] for item in GROUND_TRUTH_ITEMS)
+GROUND_TRUTH_ITEM_TOTAL = sum(item["rcv"] for item in GROUND_TRUTH_ITEMS)
 
 
 @dataclass
@@ -96,6 +100,7 @@ class RunMetrics:
     matches: list[MatchResult] = field(default_factory=list)
     ai_items: list[dict] = field(default_factory=list)
     run_time_seconds: float = 0.0
+    error: str | None = None
 
     @property
     def precision(self) -> float:
@@ -118,8 +123,22 @@ class RunMetrics:
     @property
     def value_capture_rate(self) -> float:
         return (
-            self.ai_total_value / GROUND_TRUTH_TOTAL if GROUND_TRUTH_TOTAL > 0 else 0.0
+            self.ai_total_value / GROUND_TRUTH_ITEM_TOTAL
+            if GROUND_TRUTH_ITEM_TOTAL > 0
+            else 0.0
         )
+
+    @property
+    def absolute_error(self) -> float:
+        return abs(self.ai_total_value - GROUND_TRUTH_SUPPLEMENT_AMOUNT)
+
+    @property
+    def percentage_error(self) -> float:
+        if GROUND_TRUTH_SUPPLEMENT_AMOUNT == 0:
+            return 0.0
+        return (
+            self.ai_total_value - GROUND_TRUTH_SUPPLEMENT_AMOUNT
+        ) / GROUND_TRUTH_SUPPLEMENT_AMOUNT
 
     @property
     def false_positive_rate(self) -> float:
@@ -130,7 +149,6 @@ class RunMetrics:
 
 
 def match_ai_to_ground_truth(ai_items: list[dict]) -> RunMetrics:
-    """Match AI-generated items to ground truth items."""
     metrics = RunMetrics()
     metrics.ai_items = ai_items
     metrics.ai_total_value = sum(item.get("value", 0) for item in ai_items)
@@ -175,8 +193,14 @@ def match_ai_to_ground_truth(ai_items: list[dict]) -> RunMetrics:
     return metrics
 
 
-async def submit_job(client: httpx.AsyncClient, num_photos: int = 20) -> str | None:
-    """Submit a job and return job_id."""
+async def submit_job(
+    client: httpx.AsyncClient,
+    num_photos: int = 20,
+    vision_framework: str = "parallel_aggregate",
+    estimate_framework: str = "single",
+    gap_framework: str = "single",
+    strategist_framework: str = "single",
+) -> str | None:
     estimate_pdf = TEST_DATA_DIR / "estimate" / "mijh4sdaxl4pirrf.pdf"
     photos_dir = TEST_DATA_DIR / "photos"
 
@@ -206,6 +230,10 @@ async def submit_job(client: httpx.AsyncClient, num_photos: int = 20) -> str | N
         "metadata": json.dumps(metadata),
         "costs": json.dumps(costs),
         "targets": json.dumps(targets),
+        "vision_framework": vision_framework,
+        "estimate_framework": estimate_framework,
+        "gap_framework": gap_framework,
+        "strategist_framework": strategist_framework,
     }
 
     response = await client.post(f"{BASE_URL}/v1/jobs", files=files, data=data)
@@ -219,7 +247,6 @@ async def submit_job(client: httpx.AsyncClient, num_photos: int = 20) -> str | N
 async def poll_job(
     client: httpx.AsyncClient, job_id: str, max_wait: int = 600
 ) -> dict | None:
-    """Poll until job completes."""
     start = time.time()
     while time.time() - start < max_wait:
         response = await client.get(f"{BASE_URL}/v1/jobs/{job_id}")
@@ -233,43 +260,47 @@ async def poll_job(
     return None
 
 
-async def get_supplements(client: httpx.AsyncClient, job_id: str) -> list[dict]:
-    """Extract supplement items from the completed job."""
-    response = await client.get(f"{BASE_URL}/v1/jobs/{job_id}/report?format=html")
-    if response.status_code != 200:
-        return []
-
-    html = response.text
-    items = []
-
-    import re
-
-    patterns = [
-        r"SUP-\d+[^<]*?(\$[\d,]+\.?\d*)",
-        r"<td[^>]*>([^<]*(?:solar|underlayment|valley|fascia|flue|clean|fence|fireplace|overhead|profit)[^<]*)</td>",
-    ]
-
-    return items
-
-
 async def run_single_iteration(
-    iteration: int, num_photos: int = 20
+    iteration: int,
+    num_photos: int = 20,
+    vision_framework: str = "parallel_aggregate",
+    estimate_framework: str = "single",
+    gap_framework: str = "single",
+    strategist_framework: str = "single",
 ) -> RunMetrics | None:
-    """Run a single benchmark iteration."""
     print(f"\n  Iteration {iteration + 1}...")
     start_time = time.time()
 
     async with httpx.AsyncClient(timeout=60.0) as client:
-        job_id = await submit_job(client, num_photos)
+        job_id = await submit_job(
+            client,
+            num_photos,
+            vision_framework,
+            estimate_framework,
+            gap_framework,
+            strategist_framework,
+        )
         if not job_id:
-            return None
+            metrics = RunMetrics()
+            metrics.error = "submit_failed"
+            metrics.run_time_seconds = time.time() - start_time
+            return metrics
 
         print(f"    Job: {job_id[:8]}...")
         result = await poll_job(client, job_id)
 
-        if not result or result["status"] != "completed":
-            print(f"    Failed: {result.get('status') if result else 'timeout'}")
-            return None
+        if not result:
+            metrics = RunMetrics()
+            metrics.error = "timeout"
+            metrics.run_time_seconds = time.time() - start_time
+            return metrics
+
+        if result["status"] != "completed":
+            metrics = RunMetrics()
+            metrics.error = result["status"]
+            metrics.run_time_seconds = time.time() - start_time
+            print(f"    Failed: {result['status']}")
+            return metrics
 
         results = result.get("results", {})
         supplement_count = results.get("supplement_count", 0)
@@ -294,66 +325,116 @@ async def run_single_iteration(
         return metrics
 
 
-async def run_benchmark(num_iterations: int = 10, num_photos: int = 20) -> dict:
-    """Run full benchmark with multiple iterations."""
-    print(f"\n{'=' * 60}")
+async def run_benchmark(
+    num_iterations: int = 10,
+    num_photos: int = 20,
+    vision_framework: str = "parallel_aggregate",
+    estimate_framework: str = "single",
+    gap_framework: str = "single",
+    strategist_framework: str = "single",
+) -> dict:
+    framework_label = f"v:{vision_framework}/e:{estimate_framework}/g:{gap_framework}/s:{strategist_framework}"
+    print(f"\n{'=' * 70}")
     print(f"SUPPLEMENT ACCURACY BENCHMARK")
+    print(f"Frameworks: {framework_label}")
     print(f"Iterations: {num_iterations}, Photos: {num_photos}")
-    print(f"{'=' * 60}")
+    print(f"Ground Truth Supplement: ${GROUND_TRUTH_SUPPLEMENT_AMOUNT:,.2f}")
+    print(f"{'=' * 70}")
 
     all_metrics: list[RunMetrics] = []
+    failed_runs: list[RunMetrics] = []
 
     for i in range(num_iterations):
-        metrics = await run_single_iteration(i, num_photos)
+        metrics = await run_single_iteration(
+            i,
+            num_photos,
+            vision_framework,
+            estimate_framework,
+            gap_framework,
+            strategist_framework,
+        )
         if metrics:
-            all_metrics.append(metrics)
-            print(
-                f"    P:{metrics.precision:.1%} R:{metrics.recall:.1%} F1:{metrics.f1_score:.1%}"
-            )
+            if metrics.error:
+                failed_runs.append(metrics)
+                print(f"    ERROR: {metrics.error}")
+            else:
+                all_metrics.append(metrics)
+                error = metrics.ai_total_value - GROUND_TRUTH_SUPPLEMENT_AMOUNT
+                print(
+                    f"    P:{metrics.precision:.1%} R:{metrics.recall:.1%} "
+                    f"F1:{metrics.f1_score:.1%} | "
+                    f"${metrics.ai_total_value:,.0f} (err: ${error:+,.0f})"
+                )
 
     if not all_metrics:
         print("\nNo successful runs!")
-        return {}
+        return {
+            "framework_label": framework_label,
+            "successful_runs": 0,
+            "failed_runs": len(failed_runs),
+        }
 
     avg_precision = sum(m.precision for m in all_metrics) / len(all_metrics)
     avg_recall = sum(m.recall for m in all_metrics) / len(all_metrics)
     avg_f1 = sum(m.f1_score for m in all_metrics) / len(all_metrics)
-    avg_value_capture = sum(m.value_capture_rate for m in all_metrics) / len(
-        all_metrics
-    )
+    avg_value = sum(m.ai_total_value for m in all_metrics) / len(all_metrics)
+    avg_mae = sum(m.absolute_error for m in all_metrics) / len(all_metrics)
+    avg_mape = sum(abs(m.percentage_error) for m in all_metrics) / len(all_metrics)
     avg_fpr = sum(m.false_positive_rate for m in all_metrics) / len(all_metrics)
     avg_time = sum(m.run_time_seconds for m in all_metrics) / len(all_metrics)
 
-    std_precision = (
-        sum((m.precision - avg_precision) ** 2 for m in all_metrics) / len(all_metrics)
-    ) ** 0.5
-    std_recall = (
-        sum((m.recall - avg_recall) ** 2 for m in all_metrics) / len(all_metrics)
-    ) ** 0.5
     std_f1 = (
         sum((m.f1_score - avg_f1) ** 2 for m in all_metrics) / len(all_metrics)
     ) ** 0.5
+    std_mae = (
+        sum((m.absolute_error - avg_mae) ** 2 for m in all_metrics) / len(all_metrics)
+    ) ** 0.5
+    std_value = (
+        sum((m.ai_total_value - avg_value) ** 2 for m in all_metrics) / len(all_metrics)
+    ) ** 0.5
 
-    print(f"\n{'=' * 60}")
-    print(f"RESULTS ({len(all_metrics)}/{num_iterations} successful runs)")
-    print(f"{'=' * 60}")
-    print(f"\n{'Metric':<25} {'Mean':>10} {'Std Dev':>10}")
-    print(f"{'-' * 45}")
-    print(f"{'Precision':<25} {avg_precision:>9.1%} {std_precision:>9.1%}")
-    print(f"{'Recall':<25} {avg_recall:>9.1%} {std_recall:>9.1%}")
-    print(f"{'F1 Score':<25} {avg_f1:>9.1%} {std_f1:>9.1%}")
-    print(f"{'Value Capture':<25} {avg_value_capture:>9.1%}")
-    print(f"{'False Positive Rate':<25} {avg_fpr:>9.1%}")
-    print(f"{'Avg Run Time':<25} {avg_time:>8.1f}s")
+    consistency_score = 1 - (std_value / avg_value if avg_value > 0 else 1)
+
+    print(f"\n{'=' * 70}")
+    print(
+        f"RESULTS: {framework_label} ({len(all_metrics)}/{num_iterations} successful)"
+    )
+    print(f"{'=' * 70}")
+    print(f"\n{'Metric':<30} {'Mean':>12} {'Std Dev':>12}")
+    print(f"{'-' * 54}")
+    print(f"{'Precision':<30} {avg_precision:>11.1%} {'':<12}")
+    print(f"{'Recall':<30} {avg_recall:>11.1%} {'':<12}")
+    print(f"{'F1 Score':<30} {avg_f1:>11.1%} {std_f1:>11.1%}")
+    print(f"{'False Positive Rate':<30} {avg_fpr:>11.1%} {'':<12}")
+    print(f"{'-' * 54}")
+    print(f"{'Supplement Value':<30} ${avg_value:>10,.0f} ${std_value:>10,.0f}")
+    print(f"{'Ground Truth':<30} ${GROUND_TRUTH_SUPPLEMENT_AMOUNT:>10,.0f}")
+    print(f"{'Mean Absolute Error (MAE)':<30} ${avg_mae:>10,.0f} ${std_mae:>10,.0f}")
+    print(f"{'Mean Abs % Error (MAPE)':<30} {avg_mape:>11.1%}")
+    print(f"{'-' * 54}")
+    print(f"{'Consistency Score':<30} {consistency_score:>11.1%}")
+    print(f"{'Avg Run Time':<30} {avg_time:>10.1f}s")
+    print(f"{'Success Rate':<30} {len(all_metrics) / num_iterations:>11.1%}")
 
     return {
+        "vision_framework": vision_framework,
+        "estimate_framework": estimate_framework,
+        "gap_framework": gap_framework,
+        "strategist_framework": strategist_framework,
+        "framework_label": framework_label,
         "iterations": num_iterations,
         "successful_runs": len(all_metrics),
-        "precision": {"mean": avg_precision, "std": std_precision},
-        "recall": {"mean": avg_recall, "std": std_recall},
+        "failed_runs": len(failed_runs),
+        "success_rate": len(all_metrics) / num_iterations,
+        "precision": {"mean": avg_precision},
+        "recall": {"mean": avg_recall},
         "f1_score": {"mean": avg_f1, "std": std_f1},
-        "value_capture": avg_value_capture,
         "false_positive_rate": avg_fpr,
+        "supplement_value": {"mean": avg_value, "std": std_value},
+        "ground_truth": GROUND_TRUTH_SUPPLEMENT_AMOUNT,
+        "mae": {"mean": avg_mae, "std": std_mae},
+        "mape": avg_mape,
+        "consistency_score": consistency_score,
         "avg_run_time_seconds": avg_time,
     }
 
@@ -361,11 +442,19 @@ async def run_benchmark(num_iterations: int = 10, num_photos: int = 20) -> dict:
 if __name__ == "__main__":
     import sys
 
-    iterations = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    iterations = int(sys.argv[1]) if len(sys.argv) > 1 else 10
     photos = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+    vision_fw = sys.argv[3] if len(sys.argv) > 3 else "parallel_aggregate"
+    estimate_fw = sys.argv[4] if len(sys.argv) > 4 else "single"
+    gap_fw = sys.argv[5] if len(sys.argv) > 5 else "single"
+    strategist_fw = sys.argv[6] if len(sys.argv) > 6 else "single"
 
-    results = asyncio.run(run_benchmark(iterations, photos))
+    results = asyncio.run(
+        run_benchmark(iterations, photos, vision_fw, estimate_fw, gap_fw, strategist_fw)
+    )
 
-    output_file = Path("/tmp/benchmark_results.json")
+    output_file = Path(
+        f"/tmp/benchmark_{vision_fw}_{estimate_fw}_{gap_fw}_{strategist_fw}.json"
+    )
     output_file.write_text(json.dumps(results, indent=2))
     print(f"\nResults saved to {output_file}")
