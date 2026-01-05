@@ -176,6 +176,7 @@ class JobStore:
             for key in [
                 "supplement_total",
                 "supplement_count",
+                "supplement_items",
                 "processing_time_seconds",
                 "llm_calls",
                 "review_cycles",

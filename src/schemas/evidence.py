@@ -68,6 +68,14 @@ class Component(BaseModel):
         "new",
         "missing",
         "unknown",
+        # Common LLM synonyms to improve schema matching
+        "severe_damage",
+        "moderate_damage",
+        "minor_damage",
+        "intact",
+        "excellent",
+        "fair",
+        "poor",
     ] = Field(description="Condition assessment of the component")
     description: str = Field(
         description="Detailed description of the component and its state"

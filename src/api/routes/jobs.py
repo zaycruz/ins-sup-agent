@@ -231,11 +231,13 @@ async def process_job(job_id: str) -> None:
 
         supplement_total = 0.0
         supplement_count = 0
+        supplement_items = []
         if result.supplements:
             supplement_count = len(result.supplements.supplements)
             supplement_total = sum(
                 s.estimated_value for s in result.supplements.supplements
             )
+            supplement_items = [s.model_dump() for s in result.supplements.supplements]
 
         human_flags_data = None
         if result.human_flags:
@@ -250,6 +252,7 @@ async def process_job(job_id: str) -> None:
                 "results": {
                     "supplement_total": supplement_total,
                     "supplement_count": supplement_count,
+                    "supplement_items": supplement_items,
                     "processing_time_seconds": result.processing_time_seconds,
                     "llm_calls": result.llm_calls,
                     "review_cycles": result.review_cycles,
