@@ -24,7 +24,6 @@ class ReviewAgent(BaseAgent[ReviewResult]):
             gap_analysis=context["gap_analysis"],
             estimate_interpretation=context["estimate_interpretation"],
             vision_evidence=context["vision_evidence"],
-            target_margin=context.get("target_margin", 0.33),
             iteration=context.get("iteration", 1),
             max_iterations=context.get("max_iterations", 3),
         )

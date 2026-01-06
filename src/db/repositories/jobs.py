@@ -74,7 +74,12 @@ class JobRepository:
         pool = await get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
-                "UPDATE jobs SET status = $1, result = $2::jsonb WHERE id = $3",
+                """
+                UPDATE jobs
+                SET status = $1,
+                    result = COALESCE(result, '{}'::jsonb) || $2::jsonb
+                WHERE id = $3
+                """,
                 status,
                 json.dumps(result),
                 job_id,

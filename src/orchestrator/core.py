@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 from src.agents import (
     EstimateInterpreterAgent,
@@ -36,6 +39,10 @@ from src.schemas.job import Job, Photo
 from src.schemas.review import HumanFlag, ReviewResult
 from src.schemas.supplements import SupplementStrategy
 from src.utils.pdf import extract_pdf_text
+
+_VISION_CACHE_DIR = Path("/tmp/vision_cache")
+_VISION_CACHE_DIR.mkdir(exist_ok=True)
+_VISION_MEM_CACHE: dict[str, dict[str, Any]] = {}
 
 
 class JobStatus(str, Enum):
@@ -201,7 +208,21 @@ class Orchestrator:
             review_loop = ReviewLoop(self)
             review_result = await review_loop.execute()
 
-            result = await self._generate_report(start_time)
+            if self.job.generate_report:
+                result = await self._generate_report(start_time)
+            else:
+                result = OrchestratorResult(
+                    success=True,
+                    job_id=self.job.job_id,
+                    status=JobStatus.COMPLETED,
+                    report_html=None,
+                    report_pdf=None,
+                    supplements=self.context.supplement_strategy,
+                    processing_time_seconds=time.time() - start_time,
+                    llm_calls=self.llm_call_count,
+                    review_cycles=self.context.review_cycle_count,
+                )
+
             if not review_result.approved or not review_result.ready_for_delivery:
                 result.human_flags = review_result.human_flags
             return result
@@ -247,12 +268,12 @@ class Orchestrator:
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
             for i, result in enumerate(batch_results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     self.logger.error(
                         f"Photo {batch[i].photo_id} failed after retries: {result}"
                     )
                 else:
-                    all_vision_results.append(result)
+                    all_vision_results.append(cast(VisionEvidence, result))
 
         self.context.vision_evidence = all_vision_results
         self.logger.info(
@@ -279,6 +300,27 @@ class Orchestrator:
         raise last_error or Exception("Unknown error")
 
     async def _run_vision_single(self, photo: Photo) -> VisionEvidence:
+        cache_key = hashlib.sha256(
+            self.vision_framework_name.encode("utf-8") + photo.file_binary
+        ).hexdigest()
+
+        cached = _VISION_MEM_CACHE.get(cache_key)
+        if isinstance(cached, dict):
+            cached_data = dict(cached)
+            cached_data["photo_id"] = photo.photo_id
+            return VisionEvidence.model_validate(cached_data)
+
+        cache_file = _VISION_CACHE_DIR / f"{cache_key}.json"
+        if cache_file.exists():
+            try:
+                cached_data = json.loads(cache_file.read_text())
+                if isinstance(cached_data, dict):
+                    cached_data["photo_id"] = photo.photo_id
+                    _VISION_MEM_CACHE[cache_key] = dict(cached_data)
+                    return VisionEvidence.model_validate(cached_data)
+            except Exception:
+                pass
+
         context = {
             "photo_id": photo.photo_id,
             "image_bytes": photo.file_binary,
@@ -287,8 +329,18 @@ class Orchestrator:
             "roof_type": "asphalt_shingle",
             "roof_squares": 0.0,
         }
+
         self.llm_call_count += self._get_framework_llm_calls()
-        return await self.vision_framework.analyze(context)
+        result = await self.vision_framework.analyze(context)
+
+        data = result.model_dump(mode="json")
+        _VISION_MEM_CACHE[cache_key] = dict(data)
+        try:
+            cache_file.write_text(json.dumps(data))
+        except Exception:
+            pass
+
+        return result
 
     def _get_framework_llm_calls(self) -> int:
         if self.vision_framework_name == "single_model":

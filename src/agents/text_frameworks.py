@@ -21,7 +21,6 @@ from src.schemas.gaps import GapAnalysis, ScopeGap, CoverageSummary
 from src.schemas.supplements import (
     SupplementStrategy,
     SupplementProposal,
-    MarginAnalysis,
 )
 
 
@@ -75,33 +74,8 @@ def create_fallback_gap_analysis(context: dict[str, Any]) -> GapAnalysis:
 
 def create_fallback_supplement_strategy(context: dict[str, Any]) -> SupplementStrategy:
     """Create a minimal valid SupplementStrategy when LLM fails."""
-    estimate = context.get("estimate_interpretation", {})
-    financials = estimate.get("financials", {})
-    original_estimate = financials.get("original_estimate_total", 0.0)
-
-    actual_costs = financials.get("actual_costs", {})
-    total_costs = actual_costs.get("total", 0.0)
-
-    current_margin = (
-        (original_estimate - total_costs) / original_estimate
-        if original_estimate > 0
-        else 0
-    )
-    target_margin = context.get("target_margin", 0.33)
-
     return SupplementStrategy(
         supplements=[],
-        margin_analysis=MarginAnalysis(
-            original_estimate=original_estimate,
-            total_costs=total_costs,
-            current_margin=current_margin,
-            proposed_supplement_total=0.0,
-            new_estimate_total=original_estimate,
-            projected_margin=current_margin,
-            target_margin=target_margin,
-            margin_gap_remaining=target_margin - current_margin,
-            target_achieved=current_margin >= target_margin,
-        ),
         strategy_notes=["Fallback strategy created due to LLM processing failure"],
     )
 
@@ -685,11 +659,13 @@ class StrategistConsensusFramework(StrategistFramework):
         primary_result: SupplementStrategy = results[0]  # type: ignore
         secondary_result: SupplementStrategy = results[1]  # type: ignore
 
+        primary_total = sum(s.estimated_value for s in primary_result.supplements)
+        secondary_total = sum(s.estimated_value for s in secondary_result.supplements)
         self.logger.info(
             f"Initial supplements - Primary: {len(primary_result.supplements)} items "
-            f"(${primary_result.margin_analysis.proposed_supplement_total:,.2f}), "
+            f"(${primary_total:,.2f}), "
             f"Secondary: {len(secondary_result.supplements)} items "
-            f"(${secondary_result.margin_analysis.proposed_supplement_total:,.2f})"
+            f"(${secondary_total:,.2f})"
         )
 
         for round_num in range(self.rounds - 1):
@@ -850,10 +826,10 @@ Respond with JSON:
 
         return f"""Review these supplement proposals and disagreements.
 
-AGENT A SUPPLEMENTS (${primary.margin_analysis.proposed_supplement_total:,.2f} total):
+AGENT A SUPPLEMENTS (${sum(s.estimated_value for s in primary.supplements):,.2f} total):
 {json.dumps(primary_items, indent=2)}
 
-AGENT B SUPPLEMENTS (${secondary.margin_analysis.proposed_supplement_total:,.2f} total):
+AGENT B SUPPLEMENTS (${sum(s.estimated_value for s in secondary.supplements):,.2f} total):
 {json.dumps(secondary_items, indent=2)}
 
 DISAGREEMENTS:
@@ -919,39 +895,8 @@ Return JSON with your adjustments."""
                     priority=supp.priority,
                 )
 
-        new_total = sum(s.estimated_value for s in new_supplements)
-        margin = result.margin_analysis
-
         return SupplementStrategy(
             supplements=new_supplements,
-            margin_analysis=MarginAnalysis(
-                original_estimate=margin.original_estimate,
-                total_costs=margin.total_costs,
-                current_margin=margin.current_margin,
-                proposed_supplement_total=new_total,
-                new_estimate_total=margin.original_estimate + new_total,
-                projected_margin=(
-                    margin.original_estimate + new_total - margin.total_costs
-                )
-                / (margin.original_estimate + new_total)
-                if (margin.original_estimate + new_total) > 0
-                else 0,
-                target_margin=margin.target_margin,
-                margin_gap_remaining=margin.target_margin
-                - (
-                    (margin.original_estimate + new_total - margin.total_costs)
-                    / (margin.original_estimate + new_total)
-                    if (margin.original_estimate + new_total) > 0
-                    else 0
-                ),
-                target_achieved=(
-                    (margin.original_estimate + new_total - margin.total_costs)
-                    / (margin.original_estimate + new_total)
-                    if (margin.original_estimate + new_total) > 0
-                    else 0
-                )
-                >= margin.target_margin,
-            ),
             strategy_notes=result.strategy_notes + ["Adjusted via consensus debate"],
         )
 
@@ -988,28 +933,8 @@ Return JSON with your adjustments."""
 
         total_supplement_value = sum(s.estimated_value for s in merged_supplements)
 
-        avg_original = (
-            a.margin_analysis.original_estimate + b.margin_analysis.original_estimate
-        ) / 2
-        avg_costs = (a.margin_analysis.total_costs + b.margin_analysis.total_costs) / 2
-        target = a.margin_analysis.target_margin
-
-        new_total = avg_original + total_supplement_value
-        projected_margin = (new_total - avg_costs) / new_total if new_total > 0 else 0
-
         return SupplementStrategy(
             supplements=merged_supplements,
-            margin_analysis=MarginAnalysis(
-                original_estimate=avg_original,
-                total_costs=avg_costs,
-                current_margin=a.margin_analysis.current_margin,
-                proposed_supplement_total=total_supplement_value,
-                new_estimate_total=new_total,
-                projected_margin=projected_margin,
-                target_margin=target,
-                margin_gap_remaining=target - projected_margin,
-                target_achieved=projected_margin >= target,
-            ),
             strategy_notes=[
                 f"Consensus analysis from {len(a.supplements)} + {len(b.supplements)} proposals",
                 f"Final: {len(merged_supplements)} supplements, ${total_supplement_value:,.2f} total",

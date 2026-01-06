@@ -7,7 +7,6 @@ from src.schemas.review import (
     Adjustment,
     CarrierRiskAssessment,
     HumanFlag,
-    MarginAssessment,
     RerunRequest,
     ReviewResult,
 )
@@ -126,8 +125,6 @@ class ReviewLoop:
                 return self._apply_supplement_adjustment(adjustment)
             elif adjustment.target_type == "gap":
                 return self._apply_gap_adjustment(adjustment)
-            elif adjustment.target_type == "margin_analysis":
-                return self._apply_margin_adjustment(adjustment)
             else:
                 self.logger.warning(
                     f"Unknown adjustment target type: {adjustment.target_type}"
@@ -161,17 +158,6 @@ class ReviewLoop:
                     return True
         return False
 
-    def _apply_margin_adjustment(self, adjustment: Adjustment) -> bool:
-        strategy = self.orchestrator.context.supplement_strategy
-        if not strategy:
-            return False
-
-        margin = strategy.margin_analysis
-        if hasattr(margin, adjustment.field):
-            setattr(margin, adjustment.field, adjustment.suggested_value)
-            return True
-        return False
-
     def _create_max_cycles_result(self) -> ReviewResult:
         return ReviewResult(
             approved=False,
@@ -187,12 +173,6 @@ class ReviewLoop:
                     recommended_action="Manual review of supplement package required",
                 )
             ],
-            margin_assessment=MarginAssessment(
-                target=self.orchestrator.job.business_targets.minimum_margin,
-                projected=0.0,
-                acceptable=False,
-                notes="Unable to assess - review loop exhausted",
-            ),
             carrier_risk_assessment=CarrierRiskAssessment(
                 overall_risk="high",
                 high_risk_items=[],

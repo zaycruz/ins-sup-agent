@@ -29,14 +29,12 @@ from src.schemas.gaps import (
 from src.schemas.supplements import (
     SupplementStrategy,
     SupplementProposal,
-    MarginAnalysis,
 )
 from src.schemas.review import (
     ReviewResult,
     RerunRequest,
     Adjustment,
     HumanFlag,
-    MarginAssessment,
     CarrierRiskAssessment,
 )
 
@@ -66,12 +64,10 @@ __all__ = [
     # Supplement schemas
     "SupplementStrategy",
     "SupplementProposal",
-    "MarginAnalysis",
     # Review schemas
     "ReviewResult",
     "RerunRequest",
     "Adjustment",
     "HumanFlag",
-    "MarginAssessment",
     "CarrierRiskAssessment",
 ]

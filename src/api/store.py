@@ -44,6 +44,22 @@ class JobStore:
             photos=photos_for_db,
         )
 
+        await self.repo.update_result(
+            job_id,
+            "queued",
+            {
+                "metadata": metadata,
+                "vision_framework": job_data.get(
+                    "vision_framework", "parallel_aggregate"
+                ),
+                "estimate_framework": job_data.get("estimate_framework", "single"),
+                "gap_framework": job_data.get("gap_framework", "single"),
+                "strategist_framework": job_data.get("strategist_framework", "single"),
+                "generate_report": job_data.get("generate_report", True),
+                "callback_url": job_data.get("callback_url"),
+            },
+        )
+
         from datetime import datetime, timezone
 
         return {
@@ -156,6 +172,21 @@ class JobStore:
         }
 
         if record.result:
+            stored_metadata = record.result.get("metadata")
+            if isinstance(stored_metadata, dict):
+                result["metadata"].update(stored_metadata)
+
+            for key in [
+                "vision_framework",
+                "estimate_framework",
+                "gap_framework",
+                "strategist_framework",
+                "generate_report",
+                "callback_url",
+            ]:
+                if key in record.result:
+                    result[key] = record.result[key]
+
             if "stage" in record.result:
                 result["stage"] = record.result["stage"]
             if "completed_at" in record.result:

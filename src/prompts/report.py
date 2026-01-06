@@ -69,8 +69,14 @@ def format_user_prompt(
     job_metadata: dict[str, Any],
     photo_data: list[dict[str, str]] | None = None,
 ) -> str:
-    margin_analysis = supplement_strategy.get("margin_analysis", {})
     estimate_summary = estimate_interpretation.get("estimate_summary", {})
+
+    supplements = supplement_strategy.get("supplements", [])
+    supplement_total = sum(
+        s.get("estimated_value", 0) for s in supplements if isinstance(s, dict)
+    )
+    original_estimate = estimate_summary.get("total_estimate_amount", 0)
+    revised_total = original_estimate + supplement_total
 
     prompt = f"""Generate a professional HTML supplement report for carrier submission.
 
@@ -82,7 +88,7 @@ def format_user_prompt(
 ## ESTIMATE SUMMARY
 - Carrier: {estimate_summary.get("carrier", "N/A")}
 - Claim Number: {estimate_summary.get("claim_number", "N/A")}
-- Original Estimate: ${margin_analysis.get("original_estimate", 0):,.2f}
+- Original Estimate: ${original_estimate:,.2f}
 
 ## SUPPLEMENT STRATEGY
 ```json
@@ -95,9 +101,9 @@ def format_user_prompt(
 ```
 
 ## FINANCIAL SUMMARY
-- Original Estimate: ${margin_analysis.get("original_estimate", 0):,.2f}
-- Supplement Request: ${margin_analysis.get("proposed_supplement_total", 0):,.2f}
-- Revised Total: ${margin_analysis.get("new_estimate_total", 0):,.2f}"""
+- Original Estimate: ${original_estimate:,.2f}
+- Supplement Request: ${supplement_total:,.2f}
+- Revised Total: ${revised_total:,.2f}"""
 
     if photo_data:
         prompt += f"""

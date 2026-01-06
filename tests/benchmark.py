@@ -214,8 +214,8 @@ async def submit_job(
         "property_address": "6520 Burrows Ct, Plano, TX 75023",
     }
 
-    costs = {"materials_cost": 12000.0, "labor_cost": 10000.0, "other_costs": 2000.0}
-    targets = {"minimum_margin": 0.33}
+    costs = {"materials_cost": 0.0, "labor_cost": 0.0, "other_costs": 0.0}
+    targets = {"minimum_margin": 0.0}
 
     files = [
         (
@@ -234,6 +234,7 @@ async def submit_job(
         "estimate_framework": estimate_framework,
         "gap_framework": gap_framework,
         "strategist_framework": strategist_framework,
+        "generate_report": "false",
     }
 
     response = await client.post(f"{BASE_URL}/v1/jobs", files=files, data=data)

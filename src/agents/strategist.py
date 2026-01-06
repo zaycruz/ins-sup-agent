@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from pydantic import ValidationError
+
 from src.agents.base import BaseAgent
 from src.llm.client import LLMClient
 from src.prompts.strategist import SYSTEM_PROMPT, format_user_prompt
@@ -75,7 +77,6 @@ class SupplementStrategistAgent(BaseAgent[SupplementStrategy]):
             gap_analysis=context["gap_analysis"],
             estimate_interpretation=context["estimate_interpretation"],
             vision_evidence=context["vision_evidence"],
-            target_margin=context.get("target_margin", 0.33),
             carrier=context.get("carrier"),
             jurisdiction=context.get("jurisdiction"),
         )
@@ -118,12 +119,33 @@ class SupplementStrategistAgent(BaseAgent[SupplementStrategy]):
                     if isinstance(response, dict)
                     else response
                 )
-            result = self._parse_response(str(content), SupplementStrategy)
 
-            margin = result.margin_analysis
+            schema = SupplementStrategy.model_json_schema()
+            try:
+                result = self._parse_response(
+                    str(content), SupplementStrategy, context=context
+                )
+            except ValidationError as e:
+                repaired = await self.llm.complete_structured(
+                    system="You repair JSON to match the provided schema. Preserve meaning; only change structure/fields needed for validity.",
+                    user=(
+                        "The following JSON failed schema validation. Return corrected JSON only.\n\n"
+                        "JSON:\n"
+                        f"```json\n{content}\n```\n\n"
+                        "Validation errors:\n"
+                        f"```json\n{json.dumps(e.errors(), indent=2)}\n```\n"
+                    ),
+                    response_schema=schema,
+                    schema_name="supplement_strategy_repair",
+                    model=context.get("model"),
+                )
+                result = self._parse_response(
+                    repaired, SupplementStrategy, context=context
+                )
+
+            proposed_total = sum(s.estimated_value for s in result.supplements)
             self.logger.info(
-                f"Proposed {len(result.supplements)} supplements, "
-                f"projected margin: {margin.projected_margin:.1%}"
+                f"Proposed {len(result.supplements)} supplements, ${proposed_total:,.2f} total"
             )
             return result
 

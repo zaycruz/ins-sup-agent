@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from typing import Any
+
+from pydantic import ValidationError
 
 from src.agents.base import BaseAgent
 from src.llm.client import LLMClient
@@ -42,7 +45,23 @@ class GapAnalysisAgent(BaseAgent[GapAnalysis]):
                 model=context.get("model"),
             )
 
-            result = self._parse_response(response, GapAnalysis)
+            try:
+                result = self._parse_response(response, GapAnalysis, context=context)
+            except ValidationError as e:
+                repaired = await self.llm.complete_structured(
+                    system="You repair JSON to match the provided schema. Preserve meaning; only change structure/fields needed for validity.",
+                    user=(
+                        "The following JSON failed schema validation. Return corrected JSON only.\n\n"
+                        "JSON:\n"
+                        f"```json\n{response}\n```\n\n"
+                        "Validation errors:\n"
+                        f"```json\n{json.dumps(e.errors(), indent=2)}\n```\n"
+                    ),
+                    response_schema=schema,
+                    schema_name="gap_analysis_repair",
+                    model=context.get("model"),
+                )
+                result = self._parse_response(repaired, GapAnalysis, context=context)
 
             summary = result.coverage_summary
             self.logger.info(

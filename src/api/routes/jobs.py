@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal, cast
 
 from fastapi import (
     APIRouter,
@@ -66,6 +66,9 @@ async def create_job(
     strategist_framework: str = Form(
         "single",
         description="Strategist framework: single, consensus",
+    ),
+    generate_report: bool = Form(
+        True, description="Whether to generate HTML/PDF report"
     ),
 ) -> JobCreatedResponse:
     if not estimate_pdf.filename or not estimate_pdf.filename.lower().endswith(".pdf"):
@@ -201,6 +204,7 @@ async def create_job(
             "estimate_framework": estimate_framework,
             "gap_framework": gap_framework,
             "strategist_framework": strategist_framework,
+            "generate_report": generate_report,
         }
     )
 
@@ -260,14 +264,17 @@ async def process_job(job_id: str) -> None:
                 "image/webp": "image/webp",
                 "image/heic": "image/heic",
             }
-            mime_type = mime_map.get(content_type, "image/jpeg")
+            mime_type = cast(
+                Literal["image/jpeg", "image/png", "image/webp", "image/heic"],
+                mime_map.get(content_type, "image/jpeg"),
+            )
 
             photos.append(
                 Photo(
                     photo_id=p["photo_id"],
                     file_binary=p["binary"],
                     filename=p["filename"],
-                    mime_type=mime_type,  # type: ignore
+                    mime_type=mime_type,
                 )
             )
 
@@ -289,6 +296,7 @@ async def process_job(job_id: str) -> None:
             photos=photos,
             costs=Costs(**job_data.get("costs", {})),
             business_targets=BusinessTargets(**job_data.get("targets", {})),
+            generate_report=bool(job_data.get("generate_report", True)),
         )
 
         await job_store.update(job_id, {"stage": "running_agents"})

@@ -112,6 +112,39 @@ def generate_comparison_report(results: list[dict]) -> str:
         lines.append(f"  {i}. {data.get('framework_label')}: ${mae:,.0f}")
 
     lines.append("")
+
+    def parse_label(label: str) -> dict[str, str]:
+        parts = {}
+        for chunk in label.split("/"):
+            if ":" in chunk:
+                k, v = chunk.split(":", 1)
+                parts[k] = v
+        return parts
+
+    def summarize_axis(axis: str) -> list[str]:
+        buckets: dict[str, list[dict]] = {}
+        for r in successful:
+            label = r.get("framework_label", "")
+            parsed = parse_label(label)
+            key = parsed.get(axis, "unknown")
+            buckets.setdefault(key, []).append(r)
+
+        rows = []
+        for key, items in sorted(buckets.items(), key=lambda kv: kv[0]):
+            f1_vals = [i.get("f1_score", {}).get("mean", 0) for i in items]
+            mae_vals = [i.get("mae", {}).get("mean", 0) for i in items]
+            if not f1_vals or not mae_vals:
+                continue
+            rows.append(
+                f"  {axis}:{key:<10} avg F1={(sum(f1_vals) / len(f1_vals)) * 100:5.1f}%  avg MAE=${sum(mae_vals) / len(mae_vals):,.0f}  (n={len(items)})"
+            )
+        return rows
+
+    lines.append("ROLE-LEVEL AGGREGATES (marginal impact across configs):")
+    for axis in ["e", "g", "s"]:
+        lines.extend(summarize_axis(axis))
+    lines.append("")
+
     lines.append("=" * 100)
 
     best_f1 = ranked_f1[0] if ranked_f1 else None

@@ -40,40 +40,11 @@ class SupplementProposal(BaseModel):
     model_config = {"json_schema_serialization_defaults_required": True}
 
 
-class MarginAnalysis(BaseModel):
-    """Analysis of profit margins before and after supplements."""
-
-    original_estimate: float = Field(description="Original insurance estimate total")
-    total_costs: float = Field(description="Total actual costs")
-    current_margin: float = Field(
-        description="Current margin as decimal (before supplements)"
-    )
-    proposed_supplement_total: float = Field(
-        description="Total value of proposed supplements"
-    )
-    new_estimate_total: float = Field(
-        description="Projected estimate total after supplements"
-    )
-    projected_margin: float = Field(
-        description="Projected margin after supplements as decimal"
-    )
-    target_margin: float = Field(description="Target margin as decimal")
-    margin_gap_remaining: float = Field(
-        description="Gap between projected and target margin"
-    )
-    target_achieved: bool = Field(description="Whether the target margin is achieved")
-
-    model_config = {"json_schema_serialization_defaults_required": True}
-
-
 class SupplementStrategy(BaseModel):
-    """Complete supplement strategy with proposals and margin analysis."""
+    """Complete supplement strategy with proposals."""
 
     supplements: list[SupplementProposal] = Field(
         default_factory=list, description="List of proposed supplements"
-    )
-    margin_analysis: MarginAnalysis = Field(
-        description="Margin analysis with supplements applied"
     )
     strategy_notes: list[str] = Field(
         default_factory=list,

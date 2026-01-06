@@ -40,7 +40,6 @@ class Adjustment(BaseModel):
         "gap",
         "line_item",
         "evidence",
-        "margin_analysis",
     ] = Field(description="Type of item to adjust")
     target_id: str = Field(description="ID of the item to adjust")
     field: str = Field(description="Field name to adjust")
@@ -62,19 +61,6 @@ class HumanFlag(BaseModel):
     context: str = Field(description="Relevant context for the human reviewer")
     recommended_action: str = Field(
         description="Recommended action for the human to take"
-    )
-
-    model_config = {"json_schema_serialization_defaults_required": True}
-
-
-class MarginAssessment(BaseModel):
-    """Assessment of margin achievement."""
-
-    target: float = Field(description="Target margin as decimal")
-    projected: float = Field(description="Projected margin as decimal")
-    acceptable: bool = Field(description="Whether the projected margin is acceptable")
-    notes: str | None = Field(
-        default=None, description="Additional notes about margin assessment"
     )
 
     model_config = {"json_schema_serialization_defaults_required": True}
@@ -117,9 +103,6 @@ class ReviewResult(BaseModel):
     human_flags: list[HumanFlag] = Field(
         default_factory=list,
         description="Flags requiring human attention",
-    )
-    margin_assessment: MarginAssessment = Field(
-        description="Assessment of margin target achievement"
     )
     carrier_risk_assessment: CarrierRiskAssessment = Field(
         description="Assessment of carrier pushback risk"

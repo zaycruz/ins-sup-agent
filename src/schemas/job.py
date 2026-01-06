@@ -98,5 +98,8 @@ class Job(BaseModel):
         default_factory=BusinessTargets,
         description="Business targets for margin calculations",
     )
+    generate_report: bool = Field(
+        default=True, description="Whether to generate HTML/PDF report"
+    )
 
     model_config = {"json_schema_serialization_defaults_required": True}

@@ -6,7 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src.llm.client import LLMClient
 
@@ -55,7 +55,10 @@ class BaseAgent(ABC, Generic[T]):
         pass
 
     def _sanitize_response(
-        self, data: dict[str, Any], output_type: type[T]
+        self,
+        data: dict[str, Any],
+        output_type: type[T],
+        context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         valid_categories = {
             "missing_line_item",
@@ -88,30 +91,66 @@ class BaseAgent(ABC, Generic[T]):
             else str(output_type)
         )
 
-        if output_type_name == "SupplementStrategy":
-            if "margin_analysis" in data and isinstance(data["margin_analysis"], dict):
-                margin = data["margin_analysis"]
+        if output_type_name == "GapAnalysis":
+            if (
+                "coverage_summary" not in data
+                and "scope_gaps" in data
+                and isinstance(data["scope_gaps"], list)
+            ):
+                gaps = data["scope_gaps"]
+                critical = sum(
+                    1
+                    for g in gaps
+                    if isinstance(g, dict) and g.get("severity") == "critical"
+                )
+                major = sum(
+                    1
+                    for g in gaps
+                    if isinstance(g, dict) and g.get("severity") == "major"
+                )
+                minor = sum(
+                    1
+                    for g in gaps
+                    if isinstance(g, dict) and g.get("severity") == "minor"
+                )
+                unpaid = sum(
+                    1
+                    for g in gaps
+                    if isinstance(g, dict) and bool(g.get("unpaid_work_risk"))
+                )
 
-                if "margin_gap_remaining" not in margin:
-                    target = margin.get("target_margin", 0.0)
-                    projected = margin.get("projected_margin", 0.0)
-                    margin["margin_gap_remaining"] = target - projected
-
-                if "target_achieved" not in margin:
-                    target = margin.get("target_margin", 0.0)
-                    projected = margin.get("projected_margin", 0.0)
-                    margin["target_achieved"] = projected >= target
+                data["coverage_summary"] = {
+                    "critical_gaps": critical,
+                    "major_gaps": major,
+                    "minor_gaps": minor,
+                    "total_unpaid_risk_items": unpaid,
+                    "narrative": (
+                        f"Identified {len(gaps)} gaps ({critical} critical, {major} major, {minor} minor)."
+                    ),
+                }
 
         return data
 
-    def _parse_response(self, response: str, output_type: type[T]) -> T:
+    def _parse_response(
+        self,
+        response: str,
+        output_type: type[T],
+        context: dict[str, Any] | None = None,
+    ) -> T:
+        response = self._extract_json_from_response(response)
         try:
             data = json.loads(response)
-            sanitized_data = self._sanitize_response(data, output_type)
-            return output_type.model_validate(sanitized_data)
         except json.JSONDecodeError as e:
             self.logger.error(f"Failed to parse JSON response: {e}")
             raise ValueError(f"Invalid JSON response from LLM: {e}") from e
+
+        sanitized_data = self._sanitize_response(data, output_type, context=context)
+
+        try:
+            return output_type.model_validate(sanitized_data)
+        except ValidationError as e:
+            self.logger.error(f"Failed to validate response: {e}")
+            raise
         except Exception as e:
             self.logger.error(f"Failed to validate response: {e}")
             raise ValueError(f"Response validation failed: {e}") from e
