@@ -23,7 +23,7 @@ A multi-agent AI system that automates roofing insurance supplement generation b
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/ins-sup-agent.git
+git clone https://github.com/zaycruz/ins-sup-agent.git
 cd ins-sup-agent
 
 # Install dependencies
@@ -62,36 +62,198 @@ curl -X POST http://localhost:8000/v1/jobs \
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        API Gateway                               │
-│                    POST /v1/jobs                                 │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Orchestrator                                │
-│  Coordinates agent pipeline and manages review loop              │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          ▼               ▼               ▼
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   Vision    │   │  Estimate   │   │     ...     │
-│   Agent     │   │   Agent     │   │             │
-└─────────────┘   └─────────────┘   └─────────────┘
+### High-Level System Flow
+
+```mermaid
+flowchart TD
+    A[Job Submission] --> B[Vision Analysis]
+    A --> C[Estimate Parsing]
+    B --> D[Gap Analysis]
+    C --> D
+    D --> E[Strategy Generation]
+    E --> F[Review Loop]
+    F --> G{Approved?}
+    G -->|No| E
+    G -->|Yes| H[Report Generation]
+    H --> I[Job Complete]
 ```
 
-### Agent Pipeline
+### Framework Configurations
 
-| Agent | Purpose |
-|-------|---------|
-| **Vision Agent** | Analyzes photos to detect roofing components and damage |
-| **Estimate Agent** | Parses insurance estimate PDF into structured line items |
-| **Gap Analysis Agent** | Identifies discrepancies between evidence and estimate |
-| **Strategist Agent** | Converts gaps into defensible supplement proposals |
-| **Review Agent** | Self-critiques and requests refinements |
-| **Report Agent** | Generates carrier-ready HTML/PDF reports |
+The system supports configurable frameworks at each stage, enabling ablation studies and optimization:
+
+```mermaid
+flowchart LR
+    subgraph Vision["Vision Framework"]
+        V1[ensemble_voting]
+    end
+    
+    subgraph Estimate["Estimate Framework"]
+        E1[single] --- E2[ensemble]
+    end
+    
+    subgraph Gap["Gap Framework"]
+        G1[single] --- G2[consensus]
+    end
+    
+    subgraph Strategy["Strategy Framework"]
+        S1[single] --- S2[consensus]
+    end
+    
+    V1 --> E1
+    V1 --> E2
+    E1 --> G1
+    E1 --> G2
+    E2 --> G1
+    E2 --> G2
+    G1 --> S1
+    G1 --> S2
+    G2 --> S1
+    G2 --> S2
+```
+
+### Framework Types
+
+| Stage | Type | Description |
+|-------|------|-------------|
+| **Vision** | `ensemble_voting` | Uses multiple vision models with voting mechanism to combine results |
+| **Estimate** | `single` | Single LLM parses estimate |
+| **Estimate** | `ensemble` | Multiple LLMs parse estimate, results aggregated |
+| **Gap** | `single` | Single LLM identifies coverage gaps |
+| **Gap** | `consensus` | Multiple LLMs identify gaps, merged with confidence scoring |
+| **Strategy** | `single` | Single LLM generates supplement strategy |
+| **Strategy** | `consensus` | Multiple LLMs generate strategies, merged with confidence scoring |
+
+### Configuration Naming
+
+Configurations are named using the format: `v:{vision}/e:{estimate}/g:{gap}/s:{strategy}`
+
+Example: `v:ensemble_voting/e:single/g:single/s:consensus`
+
+## Agent Pipeline
+
+| Agent | Purpose | Framework Options |
+|-------|---------|-------------------|
+| **Vision Agent** | Analyzes photos to detect roofing components and damage | ensemble_voting |
+| **Estimate Agent** | Parses insurance estimate PDF into structured line items | single, ensemble |
+| **Gap Analysis Agent** | Identifies discrepancies between evidence and estimate | single, consensus |
+| **Strategist Agent** | Converts gaps into defensible supplement proposals | single, consensus |
+| **Review Agent** | Self-critiques and requests refinements | Built-in review loop |
+| **Report Agent** | Generates carrier-ready HTML/PDF reports | Toggleable via API |
+
+### Review Loop
+
+```mermaid
+flowchart TD
+    A[Initial Supplement] --> B[Review Analysis]
+    B --> C{Issues Found?}
+    C -->|Yes| D[Request Refinement]
+    D --> E[Refined Supplement]
+    E --> B
+    C -->|No| F[Approve]
+```
+
+The review loop continues until:
+- All issues are resolved
+- Maximum iterations reached (configurable)
+- Job is manually approved/escalated
+
+## Benchmark Results
+
+Based on testing with the Clarivel Perez test case (Ground Truth Supplement: $12,542.46):
+
+### Configuration Performance Comparison
+
+| Framework Config | F1 Score | MAE | MAPE | Consistency |
+|-----------------|----------|-----|------|-------------|
+| v:ensemble_voting/e:single/g:single/s:single | **48.6%** | $5,398 | 43.0% | 77.5% |
+| v:ensemble_voting/e:single/g:consensus/s:single | 44.8% | $5,248 | 41.8% | 67.4% |
+| v:ensemble_voting/e:ensemble/g:single/s:consensus | 44.7% | $3,588 | 28.6% | 69.8% |
+| v:ensemble_voting/e:ensemble/g:single/s:single | 43.0% | $4,890 | 39.0% | 98.6% |
+| v:ensemble_voting/e:single/g:single/s:consensus | 37.6% | **$2,791** | 22.2% | 76.6% |
+| v:ensemble_voting/e:ensemble/g:consensus/s:consensus | 35.6% | $10,822 | 86.3% | 45.1% |
+| v:ensemble_voting/e:single/g:consensus/s:consensus | 31.2% | $3,314 | 26.4% | 69.7% |
+| v:ensemble_voting/e:ensemble/g:consensus/s:single | 19.0% | $9,438 | 75.2% | -41.4% |
+
+### Key Findings
+
+**Best F1 Score:** `v:ensemble_voting/e:single/g:single/s:single` at 48.6%
+
+**Best MAE:** `v:ensemble_voting/e:single/g:single/s:consensus` at $2,791
+
+### Role-Level Aggregates
+
+| Stage | Single Avg F1 | Ensemble/Consensus Avg F1 | Winner |
+|-------|--------------|--------------------------|--------|
+| Estimate | 40.6% | 35.6% | **Single (+5.0%)** |
+| Gap | 43.5% | 32.7% | **Single (+10.8%)** |
+| Strategy | 38.9% | 37.3% | **Single (+1.6%)** |
+
+### Insights
+
+1. **Single frameworks outperform ensemble variants** at the Estimate and Gap stages
+2. **Consensus merging can hurt performance** when the threshold drops valid supplements
+3. **Best F1 and MAE configurations differ** - trade-off between accuracy and consistency
+4. The `v:ensemble_voting/e:single/g:single/s:single` configuration offers the best balance of F1 and consistency
+
+## Information Flow
+
+```mermaid
+flowchart TD
+    subgraph Input["Job Input"]
+        P[Photos]
+        E[Estimate PDF]
+        M[Metadata]
+        C[Costs]
+    end
+    
+    subgraph Processing["Processing Stages"]
+        VA[Vision Analysis]
+        EA[Estimate Analysis]
+        GA[Gap Analysis]
+        SG[Strategy Generation]
+        RL[Review Loop]
+        RG[Report Generation]
+    end
+    
+    subgraph Output["Job Output"]
+        S[Supplements]
+        R[Report HTML]
+        RCV[Final RCV]
+    end
+    
+    P --> VA
+    E --> EA
+    VA --> GA
+    EA --> GA
+    GA --> SG
+    SG --> RL
+    RL -->|Approved| RG
+    RL -->|Refinement| SG
+    RG --> S
+    RG --> R
+    S --> RCV
+    
+    subgraph Cache["Caching Layer"]
+        VC[(Vision Cache)]
+    end
+    
+    P -->|Hash Key| VC
+    VC -->|Cache Hit| GA
+```
+
+### Key Technical Features
+
+1. **Vision Output Caching**: Photo analysis results are cached using SHA256 hash of (framework + photo bytes), eliminating redundant LLM calls across benchmark iterations
+
+2. **Validation Repair**: When LLM responses fail Pydantic validation, the system automatically:
+   - Captures the validation error
+   - Requests LLM to repair the response
+   - Retries parsing with corrected data
+
+3. **Report Toggle**: Report generation can be disabled via API (`generate_report=false`) for faster benchmarking
+
+4. **Framework Persistence**: Framework configurations persist in the job's `result` JSONB field, enabling consistent reprocessing
 
 ## API Endpoints
 
@@ -130,13 +292,27 @@ Configuration is managed through environment variables. See `.env.example` for a
 ins-sup-agent/
 ├── src/
 │   ├── agents/          # Agent implementations
+│   │   ├── base.py      # Base agent class with validation repair
+│   │   ├── text_frameworks.py    # Framework implementations
+│   │   ├── gap_analysis.py       # Gap analysis with repair
+│   │   └── strategist.py         # Strategy generation with repair
 │   ├── api/             # FastAPI application
+│   │   ├── app.py       # Main API application
+│   │   ├── routes/      # API route handlers
+│   │   └── store.py     # Job persistence
 │   ├── llm/             # LLM client abstractions
 │   ├── orchestrator/    # Pipeline orchestration
+│   │   └── core.py      # Main orchestrator with caching
 │   ├── prompts/         # Agent system prompts
 │   ├── schemas/         # Pydantic data models
+│   │   ├── job.py       # Job schema with framework config
+│   │   ├── supplements.py  # Supplement strategy models
+│   │   └── review.py    # Review models
 │   ├── tools/           # Agent tools (code lookup, examples)
 │   └── utils/           # Utilities (PDF extraction)
+├── tests/
+│   ├── benchmark.py           # Benchmark harness
+│   └── benchmark_all_frameworks.py  # Full framework comparison
 ├── docs/                # Documentation
 ├── main.py              # Entry point
 ├── pyproject.toml       # Dependencies
@@ -162,6 +338,16 @@ uv run ruff check src/ --fix
 
 ```bash
 uv run mypy src/
+```
+
+### Running Benchmarks
+
+```bash
+# Run full framework comparison
+uv run python tests/benchmark_all_frameworks.py <iterations> <jobs_per_config>
+
+# Example: 3 iterations, 25 jobs per config
+uv run python tests/benchmark_all_frameworks.py 3 25
 ```
 
 ## Documentation
