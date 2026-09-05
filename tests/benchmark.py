@@ -9,7 +9,6 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -336,7 +335,7 @@ async def run_benchmark(
 ) -> dict:
     framework_label = f"v:{vision_framework}/e:{estimate_framework}/g:{gap_framework}/s:{strategist_framework}"
     print(f"\n{'=' * 70}")
-    print(f"SUPPLEMENT ACCURACY BENCHMARK")
+    print("SUPPLEMENT ACCURACY BENCHMARK")
     print(f"Frameworks: {framework_label}")
     print(f"Iterations: {num_iterations}, Photos: {num_photos}")
     print(f"Ground Truth Supplement: ${GROUND_TRUTH_SUPPLEMENT_AMOUNT:,.2f}")
@@ -459,3 +458,4 @@ if __name__ == "__main__":
     )
     output_file.write_text(json.dumps(results, indent=2))
     print(f"\nResults saved to {output_file}")
+

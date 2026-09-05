@@ -16,8 +16,6 @@ from src.schemas.job import (
 from tests.llm_responses import (
     detect_agent_type,
     get_response_for_agent,
-    create_openai_response,
-    create_anthropic_response,
 )
 
 
@@ -564,3 +562,4 @@ ACV: $10,490.00
 @pytest_asyncio.fixture
 async def async_test_client() -> TestLLMClient:
     return TestLLMClient()
+
