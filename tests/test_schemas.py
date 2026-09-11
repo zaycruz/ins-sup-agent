@@ -27,14 +27,12 @@ from src.schemas.gaps import (
 )
 from src.schemas.supplements import (
     SupplementProposal,
-    MarginAnalysis,
 )
 from src.schemas.review import (
     ReviewResult,
     RerunRequest,
     Adjustment,
     HumanFlag,
-    MarginAssessment,
     CarrierRiskAssessment,
 )
 
@@ -242,20 +240,6 @@ class TestSupplementSchemas:
         assert proposal.estimated_value == 225.0
         assert proposal.pushback_risk == "low"
 
-    def test_margin_analysis(self):
-        margin = MarginAnalysis(
-            original_estimate=15000.0,
-            total_costs=13500.0,
-            current_margin=0.10,
-            proposed_supplement_total=2500.0,
-            new_estimate_total=17500.0,
-            projected_margin=0.229,
-            target_margin=0.33,
-            margin_gap_remaining=0.101,
-            target_achieved=False,
-        )
-        assert margin.target_achieved is False
-
 
 class TestReviewSchemas:
     def test_rerun_request(self):
@@ -297,9 +281,6 @@ class TestReviewSchemas:
             reruns_requested=[],
             adjustments_requested=[],
             human_flags=[],
-            margin_assessment=MarginAssessment(
-                target=0.33, projected=0.30, acceptable=True
-            ),
             carrier_risk_assessment=CarrierRiskAssessment(
                 overall_risk="low", high_risk_items=[]
             ),
