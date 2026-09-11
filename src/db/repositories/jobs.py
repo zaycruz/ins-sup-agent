@@ -5,7 +5,6 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-import asyncpg
 
 from src.db.connection import get_pool
 from src.db.models import JobRecord
@@ -137,3 +136,4 @@ class JobRepository:
                 job_id,
             )
             return result == "DELETE 1"
+

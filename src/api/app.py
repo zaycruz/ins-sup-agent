@@ -4,7 +4,6 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from src.api.routes import health, jobs, contacts
 from src.db.connection import init_db, close_pool
@@ -58,3 +57,4 @@ async def root():
 @app.get("/upload", include_in_schema=False)
 async def upload_page():
     return FileResponse(FRONTEND_DIR / "index.html")
+

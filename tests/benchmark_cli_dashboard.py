@@ -130,7 +130,7 @@ def render_dashboard():
     for line in get_recent_log_lines(6):
         print(f"  {line[:86]}")
     print("=" * 90)
-    print(f"\n  Auto-refreshing every 5 seconds. Press Ctrl+C to exit.")
+    print("\n  Auto-refreshing every 5 seconds. Press Ctrl+C to exit.")
 
 
 def main():
@@ -144,3 +144,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
